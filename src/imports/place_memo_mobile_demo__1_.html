@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PLACE MEMO — 위치 기반 메모 데모</title>
+  
+  <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=brfphl0voj"></script>
+
+  <style>
+    :root {
+      --bg:#f4f6fb;
+      --card:#ffffff;
+      --text:#171a21;
+      --sub:#707789;
+      --line:#e7eaf1;
+      --accent:#6757ff;
+      --accent-soft:#ece9ff;
+      --danger:#ef5b6c;
+      --success:#28a96b;
+      --shadow:0 18px 50px rgba(31, 39, 74, .12);
+      --radius:22px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif;color:var(--text);background:var(--bg)}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .app{min-height:100%;display:grid;grid-template-columns:330px 1fr 390px;gap:16px;padding:16px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .sidebar{display:flex;flex-direction:column;min-height:calc(100vh - 32px)}
+    .brand{padding:24px 22px 18px;border-bottom:1px solid var(--line)}
+    .brand h1{margin:0;font-size:23px;letter-spacing:-.6px}
+    .brand p{margin:8px 0 0;color:var(--sub);font-size:13px;line-height:1.55}
+    .nav{padding:14px}
+    .nav button{width:100%;display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:13px 14px;border-radius:14px;color:#4f5668;text-align:left}
+    .nav button.active{background:var(--accent-soft);color:var(--accent);font-weight:700}
+    .nav button:hover{background:#f6f7fb}
+    .nav .badge{margin-left:auto;background:#f0f1f5;color:#6f7582;border-radius:999px;padding:2px 8px;font-size:11px}
+    .summary{margin-top:auto;padding:14px}
+    .summary-card{background:linear-gradient(140deg,#25253b,#6757ff);color:#fff;border-radius:18px;padding:18px}
+    .summary-card strong{font-size:28px;display:block}
+    .summary-card span{font-size:12px;opacity:.8}
+    .summary-card .mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px}
+    .summary-card .mini div{background:rgba(255,255,255,.12);border-radius:12px;padding:10px}
+    .summary-card .mini b{display:block;font-size:15px}
+    .main{position:relative;min-height:calc(100vh - 32px)}
+    #map{height:100%;min-height:calc(100vh - 32px);border-radius:var(--radius)}
+    .topbar{position:absolute;z-index:500;left:18px;right:18px;top:18px;display:flex;gap:10px;pointer-events:none}
+    .search{flex:1;display:flex;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(30,40,70,.16);overflow:hidden;pointer-events:auto}
+    .search input{flex:1;border:0;outline:0;padding:14px 16px}
+    .search button{border:0;background:var(--accent);color:#fff;padding:0 18px;font-weight:700}
+    .map-actions{display:flex;gap:8px;pointer-events:auto}
+    .icon-btn{border:1px solid var(--line);background:#fff;border-radius:15px;padding:0 15px;box-shadow:0 10px 30px rgba(30,40,70,.16);font-weight:700}
+    .hint{position:absolute;z-index:500;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(23,26,33,.88);color:#fff;padding:10px 14px;border-radius:999px;font-size:12px;backdrop-filter:blur(8px)}
+    .detail{min-height:calc(100vh - 32px);display:flex;flex-direction:column}
+    .detail-head{padding:22px;border-bottom:1px solid var(--line)}
+    .detail-head h2{margin:0;font-size:20px}
+    .detail-head p{margin:7px 0 0;color:var(--sub);font-size:13px}
+    .detail-body{padding:18px;overflow:auto}
+    .empty{padding:30px 20px;text-align:center;color:var(--sub)}
+    .empty .emoji{font-size:42px;margin-bottom:12px}
+    .memo-card{border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px;background:#fff;transition:.2s}
+    .memo-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(31,39,74,.09)}
+    .memo-top{display:flex;gap:10px;align-items:flex-start}
+    .type-icon{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--accent-soft);font-size:20px;flex:none}
+    .memo-title{font-weight:800;line-height:1.3}
+    .memo-meta{color:var(--sub);font-size:12px;margin-top:5px;line-height:1.45}
+    .memo-content{font-size:14px;line-height:1.65;margin:13px 0;white-space:pre-wrap}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{font-size:11px;padding:5px 8px;border-radius:999px;background:#f3f4f8;color:#646b7b}
+    .memo-actions{display:flex;gap:8px;margin-top:14px}
+    .memo-actions button{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 10px;font-size:12px}
+    .memo-actions button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .fab{position:absolute;z-index:600;right:22px;bottom:22px;border:0;background:var(--accent);color:#fff;width:58px;height:58px;border-radius:50%;font-size:28px;box-shadow:0 14px 30px rgba(103,87,255,.35)}
+    .modal-wrap{position:fixed;inset:0;background:rgba(17,20,27,.43);display:none;align-items:center;justify-content:center;padding:18px;z-index:2000;backdrop-filter:blur(6px)}
+    .modal-wrap.show{display:flex}
+    .modal{width:min(560px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:26px;box-shadow:0 30px 80px rgba(0,0,0,.24)}
+    .modal-head{padding:22px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+    .modal-head h3{margin:0;font-size:20px}
+    .close{margin-left:auto;border:0;background:#f2f3f7;border-radius:50%;width:34px;height:34px}
+    .form{padding:20px;display:grid;gap:15px}
+    .field label{display:block;font-size:12px;color:#596071;font-weight:700;margin-bottom:7px}
+    .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:13px;padding:12px 13px;outline:0;background:#fff}
+    .field textarea{min-height:100px;resize:vertical}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(103,87,255,.12)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .submit{border:0;border-radius:15px;padding:14px;background:var(--accent);color:#fff;font-weight:800}
+    .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,30px);opacity:0;background:#1e2230;color:#fff;border-radius:14px;padding:12px 16px;z-index:4000;transition:.25s;box-shadow:0 12px 30px rgba(0,0,0,.22)}
+    .toast.show{opacity:1;transform:translate(-50%,0)}
+    .paywall{background:#fff8e7;border:1px solid #ffe0a5;color:#8b5e00;border-radius:14px;padding:11px;font-size:12px;line-height:1.55}
+    .location-card{border:1px dashed #d5d9e3;border-radius:16px;padding:14px;margin-bottom:14px;background:#fafbfe}
+    .location-card b{display:block;margin-bottom:6px}
+    .location-card small{color:var(--sub)}
+    .test-slider{width:100%}
+    .archive-label{font-size:12px;color:var(--sub);margin:6px 0 12px}
+    @media(max-width:1100px){
+      .app{grid-template-columns:250px 1fr}
+      .detail{position:fixed;right:16px;top:16px;bottom:16px;width:370px;z-index:1000;transform:translateX(calc(100% + 30px));transition:.25s}
+      .detail.open{transform:translateX(0)}
+    }
+    @media(max-width:720px){
+      .app{display:block;padding:0}
+      .sidebar{display:none}
+      .main{min-height:100vh;border-radius:0}
+      #map{min-height:100vh;border-radius:0}
+      .topbar{left:10px;right:10px;top:10px}
+      .search input{min-width:0}
+      .search button{display:none}
+      .hint{bottom:86px;white-space:nowrap}
+      .detail{right:0;left:0;top:auto;bottom:0;width:auto;height:72vh;border-radius:24px 24px 0 0;transform:translateY(100%)}
+      .detail.open{transform:translateY(0)}
+      .fab{bottom:18px;right:18px}
+      .grid2{grid-template-columns:1fr}
+    }
+  </style>
+
+  <style>
+    /* 스마트폰 프로토타입 프레임 */
+    html, body {
+      min-height: 100%;
+      background: #e9ecf3;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      position: relative;
+      display: block;
+      width: 390px;
+      height: 844px;
+      min-height: 844px;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 42px;
+      background: #fff;
+      box-shadow:
+        0 28px 80px rgba(23, 28, 48, .25),
+        0 0 0 8px #17191f;
+    }
+
+    .app::before {
+      content: "";
+      position: absolute;
+      z-index: 5000;
+      top: 10px;
+      left: 50%;
+      width: 112px;
+      height: 30px;
+      transform: translateX(-50%);
+      border-radius: 20px;
+      background: #17191f;
+      pointer-events: none;
+    }
+
+    .sidebar {
+      display: none !important;
+    }
+
+    .main {
+      position: absolute;
+      inset: 0;
+      min-height: 0;
+      height: 100%;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      border-radius: 0;
+    }
+
+    .topbar {
+      left: 14px;
+      right: 14px;
+      top: 54px;
+      gap: 8px;
+    }
+
+    .search {
+      height: 48px;
+      border-radius: 17px;
+    }
+
+    .search input {
+      min-width: 0;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+
+    .search button {
+      display: none;
+    }
+
+    .map-actions {
+      gap: 7px;
+    }
+
+    .icon-btn {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      overflow: hidden;
+      font-size: 0;
+      border-radius: 17px;
+    }
+
+    #myLocationBtn::after {
+      content: "◎";
+      font-size: 22px;
+    }
+
+    #simulateBtn::after {
+      content: "T";
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .hint {
+      bottom: 92px;
+      max-width: calc(100% - 32px);
+      padding: 9px 12px;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .fab {
+      right: 18px;
+      bottom: 22px;
+      width: 58px;
+      height: 58px;
+    }
+
+    .detail {
+      position: absolute;
+      z-index: 1200;
+      left: 0;
+      right: 0;
+      top: auto;
+      bottom: 0;
+      width: auto;
+      height: 68%;
+      min-height: 0;
+      border: 0;
+      border-radius: 28px 28px 0 0;
+      box-shadow: 0 -18px 42px rgba(31, 39, 74, .18);
+      transform: translateY(calc(100% - 84px));
+      transition: transform .28s ease;
+    }
+
+    .detail.open {
+      transform: translateY(0);
+    }
+
+    .detail::before {
+      content: "";
+      display: block;
+      width: 42px;
+      height: 5px;
+      margin: 10px auto 0;
+      border-radius: 999px;
+      background: #d9dce5;
+    }
+
+    .detail-head {
+      min-height: 69px;
+      padding: 12px 20px 14px;
+    }
+
+    .detail-head h2 {
+      font-size: 18px;
+    }
+
+    .detail-head p {
+      display: none;
+    }
+
+    .detail-body {
+      height: calc(100% - 78px);
+      padding: 14px 16px 30px;
+    }
+
+    .location-card {
+      margin-bottom: 12px;
+    }
+
+    .memo-card {
+      border-radius: 17px;
+      padding: 14px;
+    }
+
+    .memo-actions {
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .memo-actions button {
+      white-space: nowrap;
+    }
+
+    .modal-wrap {
+      position: absolute;
+      padding: 0;
+      align-items: flex-end;
+      border-radius: 42px;
+      overflow: hidden;
+    }
+
+    .modal {
+      width: 100%;
+      max-height: 88%;
+      border-radius: 28px 28px 0 0;
+    }
+
+    .modal-head {
+      padding: 18px 20px;
+    }
+
+    .form {
+      padding: 17px 18px 28px;
+    }
+
+    .grid2 {
+      grid-template-columns: 1fr;
+      gap: 15px;
+    }
+
+    .toast {
+      position: absolute;
+      width: calc(100% - 34px);
+      left: 50%;
+      bottom: 92px;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      html, body {
+        width: 100%;
+        min-height: 100%;
+        background: #fff;
+      }
+
+      body {
+        display: block;
+        padding: 0;
+      }
+
+      .app {
+        width: 100vw;
+        height: 100dvh;
+        min-height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .app::before {
+        display: none;
+      }
+
+      .topbar {
+        top: max(14px, env(safe-area-inset-top));
+      }
+
+      .modal-wrap {
+        position: fixed;
+        border-radius: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel sidebar">
+    <div class="brand">
+      <h1>📍 PLACE MEMO</h1>
+      <p>장소에 도착하면 나타나는<br>가족·친구 공유 메모</p>
+    </div>
+    <div class="nav">
+      <button class="active" data-view="active">🗺️ 지도 <span class="badge" id="activeCount">0</span></button>
+      <button data-view="todo">✅ 할 일 <span class="badge" id="todoCount">0</span></button>
+      <button data-view="notice">📣 공지 <span class="badge" id="noticeCount">0</span></button>
+      <button data-view="archive">🗄️ 보관함 <span class="badge" id="archiveCount">0</span></button>
+      <button data-view="liked">💜 좋아요 <span class="badge" id="likedCount">0</span></button>
+    </div>
+    <div class="summary">
+      <div class="summary-card">
+        <span>현재 활성 메모</span>
+        <strong id="summaryActive">0</strong>
+        <div class="mini">
+          <div><span>개인</span><b id="summaryPrivate">0</b></div>
+          <div><span>그룹</span><b id="summaryGroup">0</b></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="panel main">
+    <div id="map"></div>
+    <div class="topbar">
+      <div class="search">
+        <input id="searchInput" placeholder="장소 또는 메모 내용 검색" />
+        <button id="searchBtn">검색</button>
+      </div>
+      <div class="map-actions">
+        <button class="icon-btn" id="myLocationBtn">내 위치</button>
+        <button class="icon-btn" id="simulateBtn">테스트</button>
+      </div>
+    </div>
+    <div class="hint">지도를 길게 누르거나 클릭해서 메모 장소를 선택해보세요</div>
+    <button class="fab" id="addBtn">＋</button>
+  </main>
+
+  <section class="panel detail open" id="detailPanel">
+    <div class="detail-head">
+      <h2 id="detailTitle">활성 메모</h2>
+      <p id="detailSub">지도 위 메모를 선택하거나 새 메모를 만들어보세요.</p>
+    </div>
+    <div class="detail-body">
+      <div class="location-card">
+        <b>🧭 현재 위치 테스트</b>
+        <small id="currentLocationText">아직 위치를 확인하지 않았어요.</small>
+        <input class="test-slider" id="distanceSlider" type="range" min="0" max="100" value="100" style="display:none;margin-top:12px">
+      </div>
+      <div id="memoList"></div>
+    </div>
+  </section>
+</div>
+
+<div class="modal-wrap" id="memoModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>새 위치 메모</h3>
+      <button class="close" id="closeModal">×</button>
+    </div>
+    <form class="form" id="memoForm">
+      <div class="grid2">
+        <div class="field">
+          <label>장소 이름</label>
+          <input id="placeName" required placeholder="예: 올리브영 중앙대점">
+        </div>
+        <div class="field">
+          <label>메모 유형</label>
+          <select id="memoType">
+            <option value="normal">일반 메모</option>
+            <option value="todo">할 일 메모</option>
+            <option value="notice">공지 메모</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>내용</label>
+        <textarea id="memoContent" required placeholder="이 장소에서 확인할 내용을 적어주세요."></textarea>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>공개 범위</label>
+          <select id="visibility">
+            <option value="private">나 혼자</option>
+            <option value="group">친구·가족 그룹</option>
+            <option value="public">행사 링크 공개</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>알림 방식</label>
+          <select id="trigger">
+            <option value="arrive">장소 도착 시</option>
+            <option value="leave">장소 출발 시</option>
+            <option value="both">도착·출발 모두</option>
+            <option value="record">알림 없이 기록</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>알림 반경</label>
+          <select id="radius">
+            <option value="50">50m</option>
+            <option value="100" selected>100m</option>
+            <option value="300">300m</option>
+            <option value="500">500m</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>휘발 시간</label>
+          <select id="expiry">
+            <option value="1">1시간 뒤</option>
+            <option value="6">6시간 뒤</option>
+            <option value="12">12시간 뒤</option>
+            <option value="24" selected>24시간 뒤</option>
+            <option value="72">3일 뒤</option>
+            <option value="0">직접 보관할 때까지</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>선택한 위치</label>
+        <input id="coords" readonly>
+      </div>
+      <div class="paywall">
+        체험판 안내: 사진·음성·동영상 첨부, 반복 알림, 행사 링크 발급은 실제 서비스의 유료 기능으로 확장할 수 있어요.
+      </div>
+      <button class="submit" type="submit">이 장소에 메모 남기기</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- [수정 2] 네이버 지도 API에 맞춘 JavaScript 로직 -->
+<script>
+(() => {
+  const STORAGE_KEY = 'placeMemoDemoV2';
+  // 기본 위치: 서울 중앙대 (37.5052, 126.9571)
+  const DEFAULT_CENTER = new naver.maps.LatLng(37.5052, 126.9571);
+  const typeMap = {
+    normal:{label:'일반', icon:'📝'},
+    todo:{label:'할 일', icon:'✅'},
+    notice:{label:'공지', icon:'📣'}
+  };
+
+  let state = loadState();
+  let selectedLatLng = null;
+  let tempMarker = null;
+  let currentMarker = null;
+  let currentCircle = null;
+  let currentLocation = null;
+  let currentView = 'active';
+  let lastInside = {};
+  const markers = new Map();
+  const circles = new Map();
+
+  // 네이버 지도 객체 생성
+  const map = new naver.maps.Map('map', {
+    center: DEFAULT_CENTER,
+    zoom: 16,
+    zoomControl: true,
+    zoomControlOptions: {
+      position: naver.maps.Position.BOTTOM_LEFT
+    }
+  });
+
+  const els = Object.fromEntries([
+    'activeCount','todoCount','noticeCount','archiveCount','likedCount',
+    'summaryActive','summaryPrivate','summaryGroup','detailPanel','detailTitle',
+    'detailSub','memoList','memoModal','memoForm','placeName','memoType',
+    'memoContent','visibility','trigger','radius','expiry','coords','toast',
+    'currentLocationText','distanceSlider','searchInput'
+  ].map(id => [id, document.getElementById(id)]));
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return {memos:seedMemos()};
+  }
+
+  function seedMemos(){
+    const now = Date.now();
+    return [
+      {
+        id:crypto.randomUUID(), place:'중앙대학교 정문', type:'todo',
+        content:'학생지원팀에서 증명서 출력하기', visibility:'private',
+        trigger:'arrive', radius:100, lat:37.5057, lng:126.9574,
+        createdAt:now, expiresAt:now+24*3600*1000, archived:false, liked:false, notified:false
+      },
+      {
+        id:crypto.randomUUID(), place:'흑석역 근처', type:'notice',
+        content:'오는 사람 있으면 편의점에서 얼음 사오기!', visibility:'group',
+        trigger:'arrive', radius:300, lat:37.5085, lng:126.9634,
+        createdAt:now, expiresAt:now+12*3600*1000, archived:false, liked:true, notified:false
+      }
+    ];
+  }
+
+  function save(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function cleanupExpired(){
+    const now = Date.now();
+    state.memos.forEach(m => {
+      if(!m.archived && m.expiresAt && m.expiresAt <= now) m.archived = true;
+    });
+    save();
+  }
+
+  function fmtRemaining(m){
+    if(!m.expiresAt) return '만료 없음';
+    const diff = m.expiresAt - Date.now();
+    if(diff <= 0) return '만료됨';
+    const h = Math.floor(diff/3600000);
+    const min = Math.floor((diff%3600000)/60000);
+    return h > 0 ? `${h}시간 ${min}분 남음` : `${Math.max(min,1)}분 남음`;
+  }
+
+  function visibilityText(v){
+    return v==='private' ? '나 혼자' : v==='group' ? '그룹 공개' : '행사 공개';
+  }
+
+  function triggerText(v){
+    return v==='arrive' ? '도착 알림' : v==='leave' ? '출발 알림' : v==='both' ? '도착·출발' : '기록만';
+  }
+
+  function distanceMeters(a,b){
+    const R=6371000;
+    const p1=a.lat*Math.PI/180, p2=b.lat*Math.PI/180;
+    const dp=(b.lat-a.lat)*Math.PI/180;
+    const dl=(b.lng-a.lng)*Math.PI/180;
+    const x=Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+  }
+
+  function showToast(msg){
+    els.toast.textContent=msg;
+    els.toast.classList.add('show');
+    clearTimeout(showToast.t);
+    showToast.t=setTimeout(()=>els.toast.classList.remove('show'),2600);
+  }
+
+  function openModal(latlng){
+    selectedLatLng = latlng || map.getCenter();
+    const lat = typeof selectedLatLng.lat === 'function' ? selectedLatLng.lat() : selectedLatLng.lat;
+    const lng = typeof selectedLatLng.lng === 'function' ? selectedLatLng.lng() : selectedLatLng.lng;
+    
+    els.coords.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    if(tempMarker) tempMarker.setMap(null);
+
+    tempMarker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(lat, lng),
+      map: map,
+      opacity: 0.78
+    });
+
+    els.memoModal.classList.add('show');
+    setTimeout(()=>els.placeName.focus(),100);
+  }
+
+  function closeModal(){
+    els.memoModal.classList.remove('show');
+    if(tempMarker){ tempMarker.setMap(null); tempMarker=null; }
+  }
+
+  function renderMap(){
+    markers.forEach(m => m.setMap(null));
+    circles.forEach(c => c.setMap(null));
+    markers.clear(); 
+    circles.clear();
+
+    state.memos.filter(m=>!m.archived).forEach(m=>{
+      const pos = new naver.maps.LatLng(m.lat, m.lng);
+      
+      const marker = new naver.maps.Marker({
+        position: pos,
+        map: map,
+        title: `${typeMap[m.type].icon} ${m.place}`
+      });
+
+      const circle = new naver.maps.Circle({
+        map: map,
+        center: pos,
+        radius: m.radius,
+        fillColor: '#6757ff',
+        fillOpacity: 0.08,
+        strokeColor: '#6757ff',
+        strokeWeight: 1.5
+      });
+
+      naver.maps.Event.addListener(marker, 'click', ()=>{
+        currentView='active';
+        renderList(m.id);
+        document.getElementById('detailPanel').classList.add('open');
+      });
+
+      markers.set(m.id, marker); 
+      circles.set(m.id, circle);
+    });
+  }
+
+  function filteredMemos(){
+    const q=els.searchInput.value.trim().toLowerCase();
+    let list=state.memos.slice();
+    if(currentView==='active') list=list.filter(m=>!m.archived);
+    if(currentView==='todo') list=list.filter(m=>!m.archived && m.type==='todo');
+    if(currentView==='notice') list=list.filter(m=>!m.archived && m.type==='notice');
+    if(currentView==='archive') list=list.filter(m=>m.archived);
+    if(currentView==='liked') list=list.filter(m=>m.liked);
+    if(q) list=list.filter(m=>(m.place+' '+m.content).toLowerCase().includes(q));
+    return list.sort((a,b)=>b.createdAt-a.createdAt);
+  }
+
+  function renderList(focusId=null){
+    cleanupExpired();
+    const titles={
+      active:['활성 메모','현재 장소에 연결된 메모를 확인하세요.'],
+      todo:['할 일 메모','도착하면 해야 할 일을 모아봤어요.'],
+      notice:['공지 메모','가족·친구와 공유한 공지예요.'],
+      archive:['보관함','휘발되었거나 직접 보관한 메모예요.'],
+      liked:['좋아요','마음에 든 메모를 다시 볼 수 있어요.']
+    };
+    els.detailTitle.textContent=titles[currentView][0];
+    els.detailSub.textContent=titles[currentView][1];
+
+    const list=filteredMemos();
+    els.memoList.innerHTML = list.length ? list.map(m=>`
+      <article class="memo-card" data-id="${m.id}" ${focusId===m.id?'style="box-shadow:0 0 0 3px rgba(103,87,255,.18)"':''}>
+        <div class="memo-top">
+          <div class="type-icon">${typeMap[m.type].icon}</div>
+          <div>
+            <div class="memo-title">${escapeHtml(m.place)}</div>
+            <div class="memo-meta">${typeMap[m.type].label} · ${visibilityText(m.visibility)} · ${fmtRemaining(m)}</div>
+          </div>
+        </div>
+        <div class="memo-content">${escapeHtml(m.content)}</div>
+        <div class="chips">
+          <span class="chip">${triggerText(m.trigger)}</span>
+          <span class="chip">반경 ${m.radius}m</span>
+          ${m.notified?'<span class="chip">알림 확인됨</span>':''}
+        </div>
+        <div class="memo-actions">
+          <button data-action="like">${m.liked?'💜 좋아요 취소':'♡ 좋아요'}</button>
+          <button data-action="focus">📍 지도 보기</button>
+          <button data-action="${m.archived?'restore':'archive'}" class="primary">${m.archived?'복원':'보관'}</button>
+          <button data-action="delete">삭제</button>
+        </div>
+      </article>
+    `).join('') : `
+      <div class="empty">
+        <div class="emoji">🫧</div>
+        <b>아직 메모가 없어요</b>
+        <p>지도에서 장소를 선택해 첫 메모를 남겨보세요.</p>
+      </div>`;
+
+    if(focusId){
+      setTimeout(()=>document.querySelector(`[data-id="${focusId}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}),50);
+    }
+    updateCounts();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  }
+
+  function updateCounts(){
+    const active=state.memos.filter(m=>!m.archived);
+    const todo=active.filter(m=>m.type==='todo');
+    const notice=active.filter(m=>m.type==='notice');
+    const archive=state.memos.filter(m=>m.archived);
+    const liked=state.memos.filter(m=>m.liked);
+    els.activeCount.textContent=active.length;
+    els.todoCount.textContent=todo.length;
+    els.noticeCount.textContent=notice.length;
+    els.archiveCount.textContent=archive.length;
+    els.likedCount.textContent=liked.length;
+    els.summaryActive.textContent=active.length;
+    els.summaryPrivate.textContent=active.filter(m=>m.visibility==='private').length;
+    els.summaryGroup.textContent=active.filter(m=>m.visibility!=='private').length;
+  }
+
+  async function requestNotification(){
+    if(!('Notification' in window)) return;
+    if(Notification.permission==='default'){
+      try{ await Notification.requestPermission(); }catch(e){}
+    }
+  }
+
+  function notifyMemo(m, mode){
+    const text = mode==='arrive'
+      ? `${m.place}에 도착했어요: ${m.content}`
+      : `${m.place}에서 출발했어요: ${m.content}`;
+    showToast(`🔔 ${text}`);
+    if('Notification' in window && Notification.permission==='granted'){
+      try{ new Notification('PLACE MEMO', {body:text}); }catch(e){}
+    }
+    m.notified=true;
+    save();
+    renderList();
+  }
+
+  function checkGeofences(){
+    if(!currentLocation) return;
+    state.memos.filter(m=>!m.archived && m.trigger!=='record').forEach(m=>{
+      const d=distanceMeters(currentLocation,{lat:m.lat,lng:m.lng});
+      const inside=d<=m.radius;
+      const wasInside=lastInside[m.id];
+      if(wasInside===undefined){
+        lastInside[m.id]=inside;
+        if(inside && (m.trigger==='arrive'||m.trigger==='both')) notifyMemo(m,'arrive');
+        return;
+      }
+      if(!wasInside && inside && (m.trigger==='arrive'||m.trigger==='both')) notifyMemo(m,'arrive');
+      if(wasInside && !inside && (m.trigger==='leave'||m.trigger==='both')) notifyMemo(m,'leave');
+      lastInside[m.id]=inside;
+    });
+  }
+
+  function setCurrentLocation(lat,lng,label='현재 위치'){
+    currentLocation={lat,lng};
+    const pos = new naver.maps.LatLng(lat, lng);
+
+    if(currentMarker) currentMarker.setMap(null);
+    if(currentCircle) currentCircle.setMap(null);
+
+    // 내 위치 표시 (원형 서클 마커 스타일)
+    currentMarker = new naver.maps.Marker({
+      position: pos,
+      map: map,
+      icon: {
+        content: '<div style="width:18px;height:18px;background:#246BFD;border:3px solid #fff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>',
+        anchor: new naver.maps.Point(9, 9)
+      }
+    });
+
+    currentCircle = new naver.maps.Circle({
+      map: map,
+      center: pos,
+      radius: 35,
+      fillColor: '#246BFD',
+      fillOpacity: 0.08,
+      strokeColor: '#246BFD',
+      strokeWeight: 1
+    });
+
+    els.currentLocationText.textContent=`${label}: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    checkGeofences();
+  }
+
+  document.getElementById('addBtn').onclick=()=>openModal(map.getCenter());
+  document.getElementById('closeModal').onclick=closeModal;
+  els.memoModal.addEventListener('click',e=>{if(e.target===els.memoModal) closeModal()});
+
+  // 네이버 지도 클릭 이벤트
+  naver.maps.Event.addListener(map, 'click', function(e) {
+    openModal(e.coord);
+  });
+
+  els.memoForm.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const hours=Number(els.expiry.value);
+    const lat = typeof selectedLatLng.lat === 'function' ? selectedLatLng.lat() : selectedLatLng.lat;
+    const lng = typeof selectedLatLng.lng === 'function' ? selectedLatLng.lng() : selectedLatLng.lng;
+
+    const memo={
+      id:crypto.randomUUID(),
+      place:els.placeName.value.trim(),
+      type:els.memoType.value,
+      content:els.memoContent.value.trim(),
+      visibility:els.visibility.value,
+      trigger:els.trigger.value,
+      radius:Number(els.radius.value),
+      lat: lat,
+      lng: lng,
+      createdAt:Date.now(),
+      expiresAt:hours?Date.now()+hours*3600000:null,
+      archived:false, liked:false, notified:false
+    };
+    state.memos.push(memo);
+    save();
+    await requestNotification();
+    els.memoForm.reset();
+    closeModal();
+    renderMap();
+    currentView='active';
+    renderList(memo.id);
+    map.setCenter(new naver.maps.LatLng(memo.lat, memo.lng));
+    map.setZoom(16);
+    showToast('📍 위치 메모를 저장했어요');
+  });
+
+  document.querySelectorAll('.nav button').forEach(btn=>{
+    btn.onclick=()=>{
+      document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentView=btn.dataset.view;
+      renderList();
+      els.detailPanel.classList.add('open');
+    }
+  });
+
+  els.memoList.addEventListener('click',e=>{
+    const btn=e.target.closest('button');
+    if(!btn) return;
+    const card=e.target.closest('.memo-card');
+    const memo=state.memos.find(m=>m.id===card.dataset.id);
+    const action=btn.dataset.action;
+    if(action==='like') memo.liked=!memo.liked;
+    if(action==='archive') memo.archived=true;
+    if(action==='restore') memo.archived=false;
+    if(action==='delete'){
+      if(!confirm('이 메모를 삭제할까요?')) return;
+      state.memos=state.memos.filter(m=>m.id!==memo.id);
+    }
+    if(action==='focus'){
+      map.setCenter(new naver.maps.LatLng(memo.lat, memo.lng));
+      map.setZoom(17);
+    }
+    save(); renderMap(); renderList();
+  });
+
+  document.getElementById('myLocationBtn').onclick=()=>{
+    if(!navigator.geolocation){
+      showToast('이 브라우저에서는 위치 기능을 지원하지 않아요');
+      return;
+    }
+    showToast('현재 위치를 확인하고 있어요…');
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const {latitude,longitude}=pos.coords;
+      setCurrentLocation(latitude,longitude,'내 실제 위치');
+      map.setCenter(new naver.maps.LatLng(latitude, longitude));
+      map.setZoom(16);
+    },err=>{
+      showToast('위치 권한을 허용하거나 테스트 모드를 이용해주세요');
+    },{enableHighAccuracy:true,timeout:10000});
+  };
+
+  document.getElementById('simulateBtn').onclick=()=>{
+    const target=state.memos.find(m=>!m.archived);
+    if(!target){showToast('먼저 메모를 하나 만들어주세요');return;}
+    els.distanceSlider.style.display='block';
+    els.distanceSlider.value=100;
+    els.currentLocationText.textContent=`테스트 대상: ${target.place} — 슬라이더를 왼쪽으로 움직여 도착해보세요.`;
+    const base={lat:target.lat+0.0045,lng:target.lng};
+    setCurrentLocation(base.lat,base.lng,'테스트 위치');
+
+    const bounds = new naver.maps.LatLngBounds(
+      new naver.maps.LatLng(base.lat, base.lng),
+      new naver.maps.LatLng(target.lat, target.lng)
+    );
+    map.panToBounds(bounds);
+
+    els.distanceSlider.oninput=()=>{
+      const t=Number(els.distanceSlider.value)/100;
+      const lat=target.lat+0.0045*t;
+      const lng=target.lng;
+      setCurrentLocation(lat,lng, t<.12?'메모 장소 도착':'테스트 위치');
+    };
+  };
+
+  document.getElementById('searchBtn').onclick=()=>renderList();
+  els.searchInput.addEventListener('input',()=>renderList());
+
+  setInterval(()=>{cleanupExpired();checkGeofences();renderMap();renderList();},5000);
+
+  renderMap();
+  renderList();
+})();
+</script>
+</body>
+</html>
