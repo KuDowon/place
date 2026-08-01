@@ -14,7 +14,7 @@ import {
   Search,
   UserRound,
   UsersRound,
-  X,
+  X
 } from "lucide-react";
 import mapTexture from "../imports/DivApp/9db94bf4b097dba134e80a2bc7fd4238620c3e3a.png";
 
