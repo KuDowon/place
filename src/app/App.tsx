@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Archive,
@@ -6,19 +6,24 @@ import {
   Check,
   ChevronLeft,
   Clock3,
-  Heart,
   Home,
   MapPin,
-  Navigation,
   Plus,
   Search,
   UserRound,
   UsersRound,
   X
 } from "lucide-react";
-import mapTexture from "../imports/DivApp/9db94bf4b097dba134e80a2bc7fd4238620c3e3a.png";
+
+// TypeScript 환경에서 window.naver 객체 인식
+declare global {
+  interface Window {
+    naver: any;
+  }
+}
 
 type Tab = "home" | "family" | "archive" | "my";
+
 type Memo = {
   id: number;
   place: string;
@@ -30,19 +35,61 @@ type Memo = {
   time: string;
   done?: boolean;
   seen?: boolean;
-  x: string;
-  y: string;
+  lat: number; // 네이버 지도 위도
+  lng: number; // 네이버 지도 경도
 };
 
+// 중앙대학교 흑석캠퍼스 주변 기본 메모 데이터
 const initialMemos: Memo[] = [
-  { id: 1, place: "이마트 흑석점", content: "우유, 계란, 휴지 사오기", author: "엄마", emoji: "🛒", shared: true, radius: 100, time: "오늘 오후 7:00까지", x: "58%", y: "52%" },
-  { id: 2, place: "중앙약국", content: "할머니 약 받아오기", author: "아빠", emoji: "💊", shared: true, radius: 300, time: "내일 오전 11:00까지", x: "31%", y: "38%" },
-  { id: 3, place: "중앙대학교 정문", content: "학생지원팀에서 증명서 출력하기", author: "나", emoji: "✅", shared: false, radius: 100, time: "23시간 59분 남음", x: "67%", y: "27%" },
+  {
+    id: 1,
+    place: "이마트 흑석점",
+    content: "우유, 계란, 휴지 사오기",
+    author: "엄마",
+    emoji: "🛒",
+    shared: true,
+    radius: 100,
+    time: "오늘 오후 7:00까지",
+    lat: 37.5082,
+    lng: 126.9612
+  },
+  {
+    id: 2,
+    place: "중앙약국",
+    content: "할머니 약 받아오기",
+    author: "아빠",
+    emoji: "💊",
+    shared: true,
+    radius: 300,
+    time: "내일 오전 11:00까지",
+    lat: 37.5065,
+    lng: 126.9588
+  },
+  {
+    id: 3,
+    place: "중앙대학교 정문",
+    content: "학생지원팀에서 증명서 출력하기",
+    author: "나",
+    emoji: "✅",
+    shared: false,
+    radius: 100,
+    time: "23시간 59분 남음",
+    lat: 37.5052,
+    lng: 126.9571
+  }
 ];
 
 function Avatar({ name }: { name: string }) {
-  const colors: Record<string, string> = { 엄마: "bg-rose-100 text-rose-500", 아빠: "bg-sky-100 text-sky-600", 나: "bg-violet-100 text-primary" };
-  return <div className={`flex size-10 items-center justify-center rounded-2xl text-sm font-bold ${colors[name] ?? "bg-violet-100 text-primary"}`}>{name === "나" ? "유" : name.slice(0, 1)}</div>;
+  const colors: Record<string, string> = {
+    엄마: "bg-rose-100 text-rose-500",
+    아빠: "bg-sky-100 text-sky-600",
+    나: "bg-violet-100 text-primary"
+  };
+  return (
+    <div className={`flex size-10 items-center justify-center rounded-2xl text-sm font-bold ${colors[name] ?? "bg-violet-100 text-primary"}`}>
+      {name === "나" ? "유" : name.slice(0, 1)}
+    </div>
+  );
 }
 
 export default function App() {
@@ -70,11 +117,25 @@ export default function App() {
     setSelected((memo) => (memo?.id === id ? { ...memo, ...patch } : memo));
   };
 
-  const saveMemo = () => {
+  const saveMemo = (lat: number, lng: number) => {
     if (!place.trim() || !content.trim()) return;
-    const memo: Memo = { id: Date.now(), place, content, author: "나", emoji: "📍", shared, radius, time: "방금 저장됨", x: "47%", y: "42%" };
+    const memo: Memo = {
+      id: Date.now(),
+      place,
+      content,
+      author: "나",
+      emoji: "📍",
+      shared,
+      radius,
+      time: "방금 저장됨",
+      lat,
+      lng
+    };
     setMemos((items) => [memo, ...items]);
-    setComposerOpen(false); setPlace(""); setContent(""); setToast("이 장소에 메모를 붙였어요");
+    setComposerOpen(false);
+    setPlace("");
+    setContent("");
+    setToast("이 장소에 메모를 붙였어요");
   };
 
   const complete = (memo: Memo) => {
@@ -89,66 +150,645 @@ export default function App() {
     <main className="h-full w-full overflow-hidden bg-background" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
       <section className="relative h-full w-full overflow-hidden bg-background">
         <AnimatePresence mode="wait">
-          {tab === "home" && <HomeScreen key="home" memos={memos} selected={selected} onSelect={setSelected} onCompose={() => setComposerOpen(true)} />}
-          {tab === "family" && <FamilyScreen key="family" memos={familyMemos} setTab={setTab} onSelect={(memo) => { setSelected(memo); setTab("home"); }} />}
-          {tab === "archive" && <ArchiveScreen key="archive" memos={memos.filter((memo) => memo.done)} setTab={setTab} />}
-          {tab === "my" && <MyScreen key="my" memos={memos} setTab={setTab} myMemosOpen={myMemosOpen} setMyMemosOpen={setMyMemosOpen} onSelect={setSelected} />}
+          {tab === "home" && (
+            <HomeScreen
+              key="home"
+              memos={memos}
+              selected={selected}
+              onSelect={setSelected}
+              onCompose={() => setComposerOpen(true)}
+            />
+          )}
+          {tab === "family" && (
+            <FamilyScreen
+              key="family"
+              memos={familyMemos}
+              setTab={setTab}
+              onSelect={(memo) => {
+                setSelected(memo);
+                setTab("home");
+              }}
+            />
+          )}
+          {tab === "archive" && (
+            <ArchiveScreen
+              key="archive"
+              memos={memos.filter((memo) => memo.done)}
+              setTab={setTab}
+            />
+          )}
+          {tab === "my" && (
+            <MyScreen
+              key="my"
+              memos={memos}
+              setTab={setTab}
+              myMemosOpen={myMemosOpen}
+              setMyMemosOpen={setMyMemosOpen}
+              onSelect={setSelected}
+            />
+          )}
         </AnimatePresence>
 
-        {tab === "home" && !selected && <button onClick={() => setArrivalOpen(true)} className="absolute right-5 top-[124px] z-20 flex size-12 items-center justify-center rounded-2xl border border-border bg-white text-primary shadow-[0_10px_30px_rgba(30,40,70,0.16)]" aria-label="도착 알림 미리보기"><BellRing size={20} /></button>}
+        {tab === "home" && !selected && (
+          <button
+            onClick={() => setArrivalOpen(true)}
+            className="absolute right-5 top-[124px] z-20 flex size-12 items-center justify-center rounded-2xl border border-border bg-white text-primary shadow-[0_10px_30px_rgba(30,40,70,0.16)]"
+            aria-label="도착 알림 미리보기"
+          >
+            <BellRing size={20} />
+          </button>
+        )}
         {tab === "home" && <BottomNav tab={tab} setTab={setTab} />}
 
-        <AnimatePresence>{selected && <MemoDetail memo={selected} onClose={() => setSelected(null)} onComplete={() => complete(selected)} />}</AnimatePresence>
-        <AnimatePresence>{composerOpen && <Composer place={place} content={content} shared={shared} radius={radius} setPlace={setPlace} setContent={setContent} setShared={setShared} setRadius={setRadius} onClose={() => setComposerOpen(false)} onSave={saveMemo} />}</AnimatePresence>
-        <AnimatePresence>{arrivalOpen && tab === "home" && <ArrivalCard memo={memos.find((memo) => memo.id === 1)!} onLater={() => setArrivalOpen(false)} onCheck={() => { updateMemo(1, { seen: true }); setArrivalOpen(false); setSelected({ ...memos.find((memo) => memo.id === 1)!, seen: true }); }} />}</AnimatePresence>
-        <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 14 }} className="absolute bottom-24 left-1/2 z-[80] -translate-x-1/2 whitespace-nowrap rounded-full bg-[#171a21] px-4 py-3 text-[13px] font-medium text-white shadow-xl">{toast}</motion.div>}</AnimatePresence>
-        <AnimatePresence>{doneBurst && <motion.div initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0, scale: 1.7 }} className="pointer-events-none absolute inset-0 z-[90] flex items-center justify-center bg-white/30 backdrop-blur-[1px]"><div className="flex size-24 items-center justify-center rounded-full bg-primary text-white shadow-[0_18px_35px_rgba(103,87,255,0.35)]"><Check size={52} strokeWidth={3} /></div></motion.div>}</AnimatePresence>
+        <AnimatePresence>
+          {selected && (
+            <MemoDetail
+              memo={selected}
+              onClose={() => setSelected(null)}
+              onComplete={() => complete(selected)}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {composerOpen && (
+            <Composer
+              place={place}
+              content={content}
+              shared={shared}
+              radius={radius}
+              setPlace={setPlace}
+              setContent={setContent}
+              setShared={setShared}
+              setRadius={setRadius}
+              onClose={() => setComposerOpen(false)}
+              onSave={(lat, lng) => saveMemo(lat, lng)}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {arrivalOpen && tab === "home" && (
+            <ArrivalCard
+              memo={memos.find((memo) => memo.id === 1)!}
+              onLater={() => setArrivalOpen(false)}
+              onCheck={() => {
+                updateMemo(1, { seen: true });
+                setArrivalOpen(false);
+                setSelected({ ...memos.find((memo) => memo.id === 1)!, seen: true });
+              }}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 14 }}
+              className="absolute bottom-24 left-1/2 z-[80] -translate-x-1/2 whitespace-nowrap rounded-full bg-[#171a21] px-4 py-3 text-[13px] font-medium text-white shadow-xl"
+            >
+              {toast}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {doneBurst && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: 1.2 }}
+              exit={{ opacity: 0, scale: 1.7 }}
+              className="pointer-events-none absolute inset-0 z-[90] flex items-center justify-center bg-white/30 backdrop-blur-[1px]"
+            >
+              <div className="flex size-24 items-center justify-center rounded-full bg-primary text-white shadow-[0_18px_35px_rgba(103,87,255,0.35)]">
+                <Check size={52} strokeWidth={3} />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
     </main>
   );
 }
 
-function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: Memo | null; onSelect: (m: Memo) => void; onCompose: () => void }) {
+function HomeScreen({
+  memos,
+  onSelect,
+  onCompose
+}: {
+  memos: Memo[];
+  selected: Memo | null;
+  onSelect: (m: Memo) => void;
+  onCompose: () => void;
+}) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
   const [chosenPlace, setChosenPlace] = useState("");
+  
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+
   const places = [
-    { name: "이마트 흑석점", category: "대형마트 · 동작구 흑석로 97" },
-    { name: "중앙약국", category: "약국 · 동작구 흑석로 102" },
-    { name: "중앙대학교 정문", category: "대학교 · 동작구 흑석로 84" },
+    { name: "이마트 흑석점", category: "대형마트 · 동작구 흑석로 97", lat: 37.5082, lng: 126.9612 },
+    { name: "중앙약국", category: "약국 · 동작구 흑석로 102", lat: 37.5065, lng: 126.9588 },
+    { name: "중앙대학교 정문", category: "대학교 · 동작구 흑석로 84", lat: 37.5052, lng: 126.9571 }
   ].filter((place) => !query || place.name.includes(query));
+
+  // 네이버 지도 및 마커 초기화
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    if (window.naver && window.naver.maps) {
+      const center = new window.naver.maps.LatLng(37.5052, 126.9571);
+      
+      // 지도 인스턴스가 없으면 생성
+      if (!mapRef.current) {
+        mapRef.current = new window.naver.maps.Map(mapContainerRef.current, {
+          center,
+          zoom: 16,
+          zoomControl: false,
+          logoControl: false
+        });
+      }
+
+      // 기존 마커 제거
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+
+      // 메모별 네이버 지도 마커 생성
+      memos.forEach((memo) => {
+        const position = new window.naver.maps.LatLng(memo.lat, memo.lng);
+        
+        const markerContent = document.createElement("div");
+        markerContent.className = "cursor-pointer transition-transform hover:scale-110";
+        markerContent.innerHTML = `
+          <div class="flex size-10 items-center justify-center rounded-2xl border-2 border-white text-[18px] shadow-[0_8px_18px_rgba(45,39,94,.25)] ${
+            memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#ece9ff]"
+          }">
+            ${memo.done ? "✓" : memo.emoji}
+          </div>
+          <span class="mx-auto block h-2 w-2 -translate-y-1 rotate-45 bg-white shadow-sm"></span>
+        `;
+
+        const marker = new window.naver.maps.Marker({
+          position,
+          map: mapRef.current,
+          icon: {
+            content: markerContent,
+            anchor: new window.naver.maps.Point(20, 40)
+          }
+        });
+
+        window.naver.maps.Event.addListener(marker, "click", () => {
+          onSelect(memo);
+        });
+
+        markersRef.current.push(marker);
+      });
+    }
+  }, [memos, onSelect]);
+
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
 
-  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
-    <div className="absolute inset-0 bg-[length:256px_256px] bg-top-left opacity-85" style={{ backgroundImage: `url(${mapTexture})` }} />
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_56%_52%,rgba(103,87,255,.10),transparent_22%),linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,.28))]" />
-    <div className="absolute left-4 right-4 top-[52px] z-20">
-      <div className="flex h-12 items-center gap-2 rounded-[17px] border border-[#e7eaf1] bg-white px-4 shadow-[0_10px_30px_rgba(30,40,70,.16)]"><Search size={18} className="text-muted-foreground" /><input value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]" placeholder="장소 검색" /><button onClick={() => { setQuery(""); setSearchOpen(false); }} className={query || searchOpen ? "text-muted-foreground" : "hidden"}><X size={16} /></button></div>
-      <AnimatePresence>{searchOpen && <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-2 overflow-hidden rounded-[18px] border border-[#e7eaf1] bg-white shadow-[0_12px_30px_rgba(30,40,70,.14)]"><p className="px-4 pb-2 pt-3 text-[11px] font-bold text-primary">장소를 선택하세요</p>{places.map((place) => <button key={place.name} onClick={() => { setChosenPlace(place.name); setQuery(place.name); setSearchOpen(false); }} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]"><span className="flex size-8 items-center justify-center rounded-xl bg-[#eeecff] text-primary"><MapPin size={15} /></span><span><b className="block text-[13px]">{place.name}</b><small className="mt-0.5 block text-[10px] text-muted-foreground">{place.category}</small></span></button>)}<p className="border-t border-[#f0f1f5] px-4 py-2.5 text-[10px] text-muted-foreground">네이버 지역 검색 결과가 표시되는 영역이에요</p></motion.div>}</AnimatePresence>
-    </div>
-    {chosenPlace && <div className="absolute left-1/2 top-[126px] z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#171a21]/88 px-3 py-2 text-[11px] text-white"><MapPin size={13} className="text-[#bdb6ff]" />{chosenPlace} 선택됨</div>}
-    {memos.map((memo) => <button key={memo.id} onClick={() => onSelect(memo)} style={{ left: memo.x, top: memo.y }} className="absolute z-[5] -translate-x-1/2 -translate-y-full transition-transform hover:scale-110"><span className={`flex size-10 items-center justify-center rounded-2xl border-2 border-white text-[18px] shadow-[0_8px_18px_rgba(45,39,94,.25)] ${memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#ece9ff]"}`}>{memo.done ? "✓" : memo.emoji}</span><span className="mx-auto block h-2 w-2 -translate-y-1 rotate-45 bg-white shadow-sm" /></button>)}
-    <div className="absolute left-[52%] top-[49%] z-[4] flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"><span className="absolute size-12 rounded-full border border-primary/30 bg-primary/10" /><span className="size-4 rounded-full border-[3px] border-white bg-primary shadow-md" /></div>
-    <button onClick={onCompose} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]"><Plus size={28} /></button>
-    <div className="absolute bottom-[91px] left-4 right-4 z-10"><AnimatePresence mode="wait">{memoTrayOpen ? <motion.button key="expanded" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => onSelect(nearby)} className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold text-primary">가까운 메모 · 120m</span><span onClick={(event) => { event.stopPropagation(); setMemoTrayOpen(false); }} className="rounded-lg bg-[#f3f4f8] px-2 py-1 text-[10px] text-muted-foreground">내리기</span></div><div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#ece9ff]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div></motion.button> : <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur"><MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#eeecff] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span></motion.button>}</AnimatePresence></div>
-  </motion.div>;
+  const handleSelectPlace = (place: { name: string; lat: number; lng: number }) => {
+    setChosenPlace(place.name);
+    setQuery(place.name);
+    setSearchOpen(false);
+
+    if (mapRef.current && window.naver) {
+      const movePos = new window.naver.maps.LatLng(place.lat, place.lng);
+      mapRef.current.panTo(movePos);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
+      {/* 실제 네이버 지도가 렌더링되는 영역 */}
+      <div ref={mapContainerRef} className="absolute inset-0 h-full w-full z-0" />
+
+      {/* 검색 상단 바 */}
+      <div className="absolute left-4 right-4 top-[52px] z-20">
+        <div className="flex h-12 items-center gap-2 rounded-[17px] border border-[#e7eaf1] bg-white px-4 shadow-[0_10px_30px_rgba(30,40,70,.16)]">
+          <Search size={18} className="text-muted-foreground" />
+          <input
+            value={query}
+            onFocus={() => setSearchOpen(true)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setSearchOpen(true);
+            }}
+            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]"
+            placeholder="장소 검색"
+          />
+          <button
+            onClick={() => {
+              setQuery("");
+              setSearchOpen(false);
+            }}
+            className={query || searchOpen ? "text-muted-foreground" : "hidden"}
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <AnimatePresence>
+          {searchOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="mt-2 overflow-hidden rounded-[18px] border border-[#e7eaf1] bg-white shadow-[0_12px_30px_rgba(30,40,70,.14)]"
+            >
+              <p className="px-4 pb-2 pt-3 text-[11px] font-bold text-primary">장소를 선택하세요</p>
+              {places.map((place) => (
+                <button
+                  key={place.name}
+                  onClick={() => handleSelectPlace(place)}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]"
+                >
+                  <span className="flex size-8 items-center justify-center rounded-xl bg-[#eeecff] text-primary">
+                    <MapPin size={15} />
+                  </span>
+                  <span>
+                    <b className="block text-[13px]">{place.name}</b>
+                    <small className="mt-0.5 block text-[10px] text-muted-foreground">{place.category}</small>
+                  </span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {chosenPlace && (
+        <div className="absolute left-1/2 top-[126px] z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#171a21]/88 px-3 py-2 text-[11px] text-white">
+          <MapPin size={13} className="text-[#bdb6ff]" />
+          {chosenPlace} 선택됨
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={onCompose}
+        className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]"
+      >
+        <Plus size={28} />
+      </button>
+
+      {/* 하단 메모 요약 트레이 */}
+      <div className="absolute bottom-[91px] left-4 right-4 z-10">
+        <AnimatePresence mode="wait">
+          {memoTrayOpen ? (
+            <motion.button
+              key="expanded"
+              initial={{ y: 28, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 28, opacity: 0 }}
+              onClick={() => onSelect(nearby)}
+              className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-primary">가까운 메모 · 120m</span>
+                <span
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMemoTrayOpen(false);
+                  }}
+                  className="rounded-lg bg-[#f3f4f8] px-2 py-1 text-[10px] text-muted-foreground"
+                >
+                  내리기
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#ece9ff]">{nearby.emoji}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-foreground">{nearby.place}</p>
+                  <p className="truncate text-[12px] text-muted-foreground">
+                    {nearby.author} · {nearby.content}
+                  </p>
+                </div>
+                <MapPin size={18} className="text-primary" />
+              </div>
+            </motion.button>
+          ) : (
+            <motion.button
+              key="collapsed"
+              initial={{ y: 28, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 28, opacity: 0 }}
+              onClick={() => setMemoTrayOpen(true)}
+              className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur"
+            >
+              <MapPin size={15} className="text-primary" />
+              메모 보기 <span className="rounded-full bg-[#eeecff] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: { id: Tab; label: string; icon: typeof Home }[] = [{ id: "home", label: "홈", icon: Home }, { id: "family", label: "가족", icon: UsersRound }, { id: "archive", label: "보관함", icon: Archive }, { id: "my", label: "마이", icon: UserRound }];
-  return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2">{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
+  const items: { id: Tab; label: string; icon: typeof Home }[] = [
+    { id: "home", label: "홈", icon: Home },
+    { id: "family", label: "가족", icon: UsersRound },
+    { id: "archive", label: "보관함", icon: Archive },
+    { id: "my", label: "마이", icon: UserRound }
+  ];
+  return (
+    <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2">
+      {items.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          onClick={() => setTab(id)}
+          className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${
+            tab === id ? "text-primary" : "text-[#9aa0ae]"
+          }`}
+        >
+          <span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}>
+            <Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} />
+          </span>
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
 }
+
 function MemoDetail({ memo, onClose, onComplete }: { memo: Memo; onClose: () => void; onComplete: () => void }) {
-  return <motion.section initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 300 }} className="absolute inset-x-0 bottom-0 z-50 rounded-t-[28px] bg-white px-5 pb-8 pt-3 shadow-[0_-18px_42px_rgba(31,39,74,.18)]"><div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-[#d9dce5]" /><div className="mb-5 flex items-center justify-between border-b border-border pb-4"><div><p className="text-[12px] font-semibold text-primary">장소 메모</p><h2 className="mt-0.5 text-[19px] font-bold">{memo.place}</h2></div><button onClick={onClose} className="flex size-9 items-center justify-center rounded-full bg-[#f3f4f8]"><X size={18} /></button></div><div className="rounded-[18px] bg-[#fafbfe] p-4"><div className="mb-3 flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-[14px] bg-[#ece9ff] text-xl">{memo.emoji}</div><div><p className="text-[13px] text-muted-foreground">{memo.author === "나" ? "내가 남긴 메모" : `${memo.author}가 남긴 심부름`}</p><p className="text-[12px] text-muted-foreground">도착 알림 · 반경 {memo.radius}m</p></div></div><p className={`text-[16px] leading-7 ${memo.done ? "text-[#a7acb7] line-through" : "font-medium text-foreground"}`}>{memo.content}</p></div>{memo.seen && !memo.done && <p className="mt-3 rounded-xl bg-[#f2f0ff] px-3 py-2 text-[12px] font-medium text-primary">✓ 도착 메모를 확인했어요</p>}{memo.done && <p className="mt-3 rounded-xl bg-[#f0f2f5] px-3 py-2 text-[12px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}<div className="mt-5 flex gap-2">{memo.shared && !memo.done && <button onClick={onComplete} className="flex flex-1 items-center justify-center gap-2 rounded-[14px] bg-primary py-3.5 text-sm font-bold text-white"><Check size={17} /> 장보기 완료</button>}<button onClick={onClose} className={`${memo.shared && !memo.done ? "w-28" : "flex-1"} rounded-[14px] border border-border py-3.5 text-sm font-semibold text-[#5f6674]`}>닫기</button></div></motion.section>;
+  return (
+    <motion.section
+      initial={{ y: "100%" }}
+      animate={{ y: 0 }}
+      exit={{ y: "100%" }}
+      transition={{ type: "spring", damping: 28, stiffness: 300 }}
+      className="absolute inset-x-0 bottom-0 z-50 rounded-t-[28px] bg-white px-5 pb-8 pt-3 shadow-[0_-18px_42px_rgba(31,39,74,.18)]"
+    >
+      <div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-[#d9dce5]" />
+      <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
+        <div>
+          <p className="text-[12px] font-semibold text-primary">장소 메모</p>
+          <h2 className="mt-0.5 text-[19px] font-bold">{memo.place}</h2>
+        </div>
+        <button onClick={onClose} className="flex size-9 items-center justify-center rounded-full bg-[#f3f4f8]">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="rounded-[18px] bg-[#fafbfe] p-4">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-[14px] bg-[#ece9ff] text-xl">{memo.emoji}</div>
+          <div>
+            <p className="text-[13px] text-muted-foreground">{memo.author === "나" ? "내가 남긴 메모" : `${memo.author}가 남긴 심부름`}</p>
+            <p className="text-[12px] text-muted-foreground">도착 알림 · 반경 {memo.radius}m</p>
+          </div>
+        </div>
+        <p className={`text-[16px] leading-7 ${memo.done ? "text-[#a7acb7] line-through" : "font-medium text-foreground"}`}>{memo.content}</p>
+      </div>
+      {memo.seen && !memo.done && <p className="mt-3 rounded-xl bg-[#f2f0ff] px-3 py-2 text-[12px] font-medium text-primary">✓ 도착 메모를 확인했어요</p>}
+      {memo.done && <p className="mt-3 rounded-xl bg-[#f0f2f5] px-3 py-2 text-[12px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}
+      <div className="mt-5 flex gap-2">
+        {memo.shared && !memo.done && (
+          <button onClick={onComplete} className="flex flex-1 items-center justify-center gap-2 rounded-[14px] bg-primary py-3.5 text-sm font-bold text-white">
+            <Check size={17} /> 장보기 완료
+          </button>
+        )}
+        <button onClick={onClose} className={`${memo.shared && !memo.done ? "w-28" : "flex-1"} rounded-[14px] border border-border py-3.5 text-sm font-semibold text-[#5f6674]`}>
+          닫기
+        </button>
+      </div>
+    </motion.section>
+  );
 }
 
-function Composer(props: { place: string; content: string; shared: boolean; radius: number; setPlace: (v: string) => void; setContent: (v: string) => void; setShared: (v: boolean) => void; setRadius: (v: number) => void; onClose: () => void; onSave: () => void }) {
-  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]"><motion.section initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 29, stiffness: 300 }} className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white px-5 pb-8 pt-3"><div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-[#d9dce5]" /><div className="mb-5 flex items-center justify-between"><div><p className="text-[12px] font-semibold text-primary">새로운 장소 메모</p><h2 className="text-xl font-bold">어디에 붙일까요?</h2></div><button onClick={props.onClose} className="flex size-9 items-center justify-center rounded-full bg-[#f3f4f8]"><X size={18} /></button></div><div className="space-y-3"><label className="block text-[13px] font-bold">장소 이름<input value={props.place} onChange={(e) => props.setPlace(e.target.value)} placeholder="예: 이마트 흑석점" className="mt-1.5 h-12 w-full rounded-[13px] border border-border bg-[#fafbfe] px-3 text-sm font-normal outline-none focus:border-primary" /></label><label className="block text-[13px] font-bold">메모 내용<textarea value={props.content} onChange={(e) => props.setContent(e.target.value)} placeholder="이 장소에서 기억할 일을 적어보세요" className="mt-1.5 h-[74px] w-full resize-none rounded-[13px] border border-border bg-[#fafbfe] p-3 text-sm font-normal outline-none focus:border-primary" /></label><div><p className="mb-2 text-[13px] font-bold">공개 범위</p><div className="grid grid-cols-2 rounded-[13px] bg-[#f3f4f8] p-1"><button onClick={() => props.setShared(false)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${!props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>나만 보기</button><button onClick={() => props.setShared(true)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>가족 공유</button></div></div><div><p className="mb-2 text-[13px] font-bold">도착 알림 반경</p><div className="flex gap-2">{[50, 100, 300].map((v) => <button key={v} onClick={() => props.setRadius(v)} className={`flex-1 rounded-xl border py-2 text-[12px] font-bold ${props.radius === v ? "border-primary bg-[#eeecff] text-primary" : "border-border text-muted-foreground"}`}>{v}m</button>)}</div></div></div><button disabled={!props.place.trim() || !props.content.trim()} onClick={props.onSave} className="mt-5 w-full rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#c7c4ed]">메모 붙이기</button></motion.section></motion.div>;
+function Composer(props: {
+  place: string;
+  content: string;
+  shared: boolean;
+  radius: number;
+  setPlace: (v: string) => void;
+  setContent: (v: string) => void;
+  setShared: (v: boolean) => void;
+  setRadius: (v: number) => void;
+  onClose: () => void;
+  onSave: (lat: number, lng: number) => void;
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]">
+      <motion.section
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 29, stiffness: 300 }}
+        className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white px-5 pb-8 pt-3"
+      >
+        <div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-[#d9dce5]" />
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <p className="text-[12px] font-semibold text-primary">새로운 장소 메모</p>
+            <h2 className="text-xl font-bold">어디에 붙일까요?</h2>
+          </div>
+          <button onClick={props.onClose} className="flex size-9 items-center justify-center rounded-full bg-[#f3f4f8]">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <label className="block text-[13px] font-bold">
+            장소 이름
+            <input
+              value={props.place}
+              onChange={(e) => props.setPlace(e.target.value)}
+              placeholder="예: 이마트 흑석점"
+              className="mt-1.5 h-12 w-full rounded-[13px] border border-border bg-[#fafbfe] px-3 text-sm font-normal outline-none focus:border-primary"
+            />
+          </label>
+          <label className="block text-[13px] font-bold">
+            메모 내용
+            <textarea
+              value={props.content}
+              onChange={(e) => props.setContent(e.target.value)}
+              placeholder="이 장소에서 기억할 일을 적어보세요"
+              className="mt-1.5 h-[74px] w-full resize-none rounded-[13px] border border-border bg-[#fafbfe] p-3 text-sm font-normal outline-none focus:border-primary"
+            />
+          </label>
+          <div>
+            <p className="mb-2 text-[13px] font-bold">공개 범위</p>
+            <div className="grid grid-cols-2 rounded-[13px] bg-[#f3f4f8] p-1">
+              <button
+                onClick={() => props.setShared(false)}
+                className={`rounded-[10px] py-2.5 text-[13px] font-bold ${!props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}
+              >
+                나만 보기
+              </button>
+              <button
+                onClick={() => props.setShared(true)}
+                className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}
+              >
+                가족 공유
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-[13px] font-bold">도착 알림 반경</p>
+            <div className="flex gap-2">
+              {[50, 100, 300].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => props.setRadius(v)}
+                  className={`flex-1 rounded-xl border py-2 text-[12px] font-bold ${
+                    props.radius === v ? "border-primary bg-[#eeecff] text-primary" : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {v}m
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <button
+          disabled={!props.place.trim() || !props.content.trim()}
+          onClick={() => props.onSave(37.5052, 126.9571)} // 저장 시 지도 기본 위치 할당
+          className="mt-5 w-full rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#c7c4ed]"
+        >
+          메모 붙이기
+        </button>
+      </motion.section>
+    </motion.div>
+  );
 }
 
-function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]"><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
+function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) {
+  return (
+    <motion.section
+      initial={{ y: 160, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 160, opacity: 0 }}
+      transition={{ type: "spring", damping: 23, stiffness: 320 }}
+      className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]"
+    >
+      <div className="mb-3 flex items-start gap-3">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div>
+        <div>
+          <p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p>
+          <p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]">
+          <X size={15} /> 나중에 보기
+        </button>
+        <button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white">
+          <Check size={15} /> 확인했어요
+        </button>
+      </div>
+    </motion.section>
+  );
+}
 
-function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 가족의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">가족 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
-function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p><h1 className="mt-1 text-[24px] font-bold">보관함</h1><div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">{memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}</div><BottomNav tab="archive" setTab={setTab} /></motion.div>; }
-function MyScreen({ memos, setTab, myMemosOpen, setMyMemosOpen, onSelect }: { memos: Memo[]; setTab: (tab: Tab) => void; myMemosOpen: boolean; setMyMemosOpen: (value: boolean) => void; onSelect: (memo: Memo) => void }) { const ownMemos = memos.filter((memo) => memo.author === "나"); return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="flex items-center gap-3"><Avatar name="나" /><div><p className="text-lg font-bold">유연님</p><p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p></div></div>{myMemosOpen ? <div className="mt-7"><button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary"><ChevronLeft size={17} /> 설정으로</button><h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2><div className="space-y-2">{ownMemos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left"><p className="flex items-center gap-1 text-[12px] text-primary"><MapPin size={13} />{memo.place}</p><p className="mt-1 text-[14px] font-medium">{memo.content}</p></button>)}{!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}</div></div> : <div className="mt-7 space-y-3"><button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">내 메모 보기 <MapPin className="float-right text-primary" size={18} /></button><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">알림 설정 <BellRing className="float-right text-primary" size={18} /></div><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">가족 관리 <UsersRound className="float-right text-primary" size={18} /></div></div>}<BottomNav tab="my" setTab={setTab} /></motion.div>; }
+function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) {
+  return (
+    <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]">
+      <div className="mb-6">
+        <p className="text-[12px] font-bold text-primary">우리 가족의 장소 메모</p>
+        <h1 className="mt-1 text-[24px] font-bold">가족 심부름</h1>
+      </div>
+      <div className="space-y-3">
+        {memos.map((memo) => (
+          <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]">
+            <div className="flex gap-3">
+              <Avatar name={memo.author} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[14px] font-bold">{memo.author}</p>
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Clock3 size={11} />
+                    {memo.time}
+                  </span>
+                </div>
+                <p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary">
+                  <MapPin size={12} />
+                  {memo.place}
+                </p>
+                <p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>
+                {memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <BottomNav tab="family" setTab={setTab} />
+    </motion.div>
+  );
+}
+
+function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]">
+      <p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p>
+      <h1 className="mt-1 text-[24px] font-bold">보관함</h1>
+      <div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">
+        {memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}
+      </div>
+      <BottomNav tab="archive" setTab={setTab} />
+    </motion.div>
+  );
+}
+
+function MyScreen({
+  memos,
+  setTab,
+  myMemosOpen,
+  setMyMemosOpen,
+  onSelect
+}: {
+  memos: Memo[];
+  setTab: (tab: Tab) => void;
+  myMemosOpen: boolean;
+  setMyMemosOpen: (value: boolean) => void;
+  onSelect: (memo: Memo) => void;
+}) {
+  const ownMemos = memos.filter((memo) => memo.author === "나");
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]">
+      <div className="flex items-center gap-3">
+        <Avatar name="나" />
+        <div>
+          <p className="text-lg font-bold">유연님</p>
+          <p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p>
+        </div>
+      </div>
+      {myMemosOpen ? (
+        <div className="mt-7">
+          <button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary">
+            <ChevronLeft size={17} /> 설정으로
+          </button>
+          <h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2>
+          <div className="space-y-2">
+            {ownMemos.map((memo) => (
+              <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left">
+                <p className="flex items-center gap-1 text-[12px] text-primary">
+                  <MapPin size={13} />
+                  {memo.place}
+                </p>
+                <p className="mt-1 text-[14px] font-medium">{memo.content}</p>
+              </button>
+            ))}
+            {!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-7 space-y-3">
+          <button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">
+            내 메모 보기 <MapPin className="float-right text-primary" size={18} />
+          </button>
+          <div className="rounded-[18px] bg-white p-4 text-sm font-semibold">
+            알림 설정 <BellRing className="float-right text-primary" size={18} />
+          </div>
+          <div className="rounded-[18px] bg-white p-4 text-sm font-semibold">
+            가족 관리 <UsersRound className="float-right text-primary" size={18} />
+          </div>
+        </div>
+      )}
+      <BottomNav tab="my" setTab={setTab} />
+    </motion.div>
+  );
+}
