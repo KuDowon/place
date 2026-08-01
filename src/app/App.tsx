@@ -20,7 +20,6 @@ import {
   X,
 } from "lucide-react";
 
-// TypeScript에서 window.naver 연동 인식 선언
 declare global {
   interface Window {
     naver: any;
@@ -55,7 +54,10 @@ type NaverPlace = {
   lng?: number;
 };
 
-// 백엔드 미사용 시 대체할 목업 장소 데이터
+// 고정 테스트 좌표 (위도: 37.504452, 경도: 126.956481)
+const TEST_LAT = 37.504452;
+const TEST_LNG = 126.956481;
+
 const MOCK_PLACES: NaverPlace[] = [
   { title: "이마트 흑석점", category: "대형마트", address: "서울특별시 동작구 흑석동 97", roadAddress: "서울특별시 동작구 흑석로 97", lat: 37.5082, lng: 126.9635 },
   { title: "중앙약국", category: "약국", address: "서울특별시 동작구 흑석동 102", roadAddress: "서울특별시 동작구 흑석로 102", lat: 37.5071, lng: 126.9585 },
@@ -64,7 +66,6 @@ const MOCK_PLACES: NaverPlace[] = [
   { title: "이마트24 흑석점", category: "편의점", address: "서울특별시 동작구 흑석동 201", roadAddress: "서울특별시 동작구 흑석로 201", lat: 37.5060, lng: 126.9590 },
 ];
 
-// 백엔드 없이 지도 API(Geocoding) 및 클라이언트 단독 검색 수행
 function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: boolean } {
   const [places, setPlaces] = useState<NaverPlace[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +79,6 @@ function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: bo
 
     setLoading(true);
     const timer = window.setTimeout(() => {
-      // 1) 네이버 지도 Geocode 서비스가 로드되어 있는지 확인
       if (window.naver?.maps?.Service?.geocode) {
         window.naver.maps.Service.geocode(
           { query: q },
@@ -95,14 +95,12 @@ function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: bo
               }));
               setPlaces(items);
             } else {
-              // 검색 결과가 없을 경우 목업 검색으로 대체
               const filtered = MOCK_PLACES.filter((p) => p.title.includes(q) || p.category.includes(q));
               setPlaces(filtered);
             }
           }
         );
       } else {
-        // 2) 지도 SDK Geocoding 미지원 시 목업 데이터 검색
         const filtered = MOCK_PLACES.filter((p) => p.title.includes(q) || p.category.includes(q));
         setPlaces(filtered);
         setLoading(false);
@@ -139,6 +137,12 @@ export default function App() {
   const [radius, setRadius] = useState(100);
   const [doneBurst, setDoneBurst] = useState(false);
   const [myMemosOpen, setMyMemosOpen] = useState(false);
+  
+  // 🧪 개발자 테스트용 상태 (5회 연속 클릭 트리거)
+  const [isDebugLocation, setIsDebugLocation] = useState(false);
+  const clickCountRef = useRef(0);
+  const clickTimerRef = useRef<number | null>(null);
+
   const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
@@ -146,6 +150,34 @@ export default function App() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  // 화면 연속 5회 타격 시 개발자 테스트 모드 토글
+  const handleSecretTap = () => {
+    clickCountRef.current += 1;
+
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+    }
+
+    if (clickCountRef.current >= 5) {
+      clickCountRef.current = 0;
+      setIsDebugLocation(true);
+      setToast("🧪 개발자 모드: 현위치가 테스트 좌표로 고정되었습니다 (37.504452, 126.956481)");
+
+      if (mapInstanceRef.current && window.naver?.maps) {
+        const testLatLng = new window.naver.maps.LatLng(TEST_LAT, TEST_LNG);
+        mapInstanceRef.current.panTo(testLatLng);
+
+        if (mapInstanceRef.current._myLocationMarker) {
+          mapInstanceRef.current._myLocationMarker.setPosition(testLatLng);
+        }
+      }
+    } else {
+      clickTimerRef.current = window.setTimeout(() => {
+        clickCountRef.current = 0;
+      }, 1500);
+    }
+  };
 
   const updateMemo = (id: number, patch: Partial<Memo>) => {
     setMemos((items) => items.map((memo) => (memo.id === id ? { ...memo, ...patch } : memo)));
@@ -155,51 +187,49 @@ export default function App() {
   const saveMemo = (images: string[], coverImage: string) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
 
-    const createAndSaveMemo = (baseLat: number, baseLng: number) => {
-      const offsetLat = (Math.random() - 0.5) * 0.0003;
-      const offsetLng = (Math.random() - 0.5) * 0.0003;
+    let baseLat = TEST_LAT;
+    let baseLng = TEST_LNG;
 
-      const targetLat = baseLat + offsetLat;
-      const targetLng = baseLng + offsetLng;
-
-      const memo: Memo = {
-        id: Date.now(),
-        place,
-        content,
-        author: "나",
-        emoji: "📍",
-        shared,
-        radius,
-        time: "방금 저장됨",
-        lat: targetLat,
-        lng: targetLng,
-        images,
-        coverImage: coverImage || undefined,
-      };
-
-      setMemos((items) => [memo, ...items]);
-      setComposerOpen(false);
-      setPlace("");
-      setContent("");
-      setToast("이 장소에 메모를 붙였어요");
-
-      if (mapInstanceRef.current && window.naver && window.naver.maps) {
-        const targetLatLng = new window.naver.maps.LatLng(targetLat, targetLng);
-        mapInstanceRef.current.panTo(targetLatLng);
+    // 테스트 모드가 아니면 기존 방식으로 지도 중심 좌표 사용
+    if (!isDebugLocation) {
+      baseLat = 37.5051;
+      baseLng = 126.9571;
+      if (mapInstanceRef.current && window.naver?.maps) {
+        const center = mapInstanceRef.current.getCenter();
+        baseLat = center.lat();
+        baseLng = center.lng();
       }
+    }
+
+    const offsetLat = (Math.random() - 0.5) * 0.0003;
+    const offsetLng = (Math.random() - 0.5) * 0.0003;
+
+    const targetLat = baseLat + offsetLat;
+    const targetLng = baseLng + offsetLng;
+
+    const memo: Memo = {
+      id: Date.now(),
+      place,
+      content,
+      author: "나",
+      emoji: "📍",
+      shared,
+      radius,
+      time: "방금 저장됨",
+      lat: targetLat,
+      lng: targetLng,
+      images,
+      coverImage: coverImage || undefined,
     };
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          createAndSaveMemo(position.coords.latitude, position.coords.longitude);
-        },
-        () => {
-          createAndSaveMemo(37.5051, 126.9571);
-        }
-      );
-    } else {
-      createAndSaveMemo(37.5051, 126.9571);
+    setMemos((items) => [memo, ...items]);
+    setComposerOpen(false);
+    setPlace("");
+    setContent("");
+    setToast("이 장소에 메모를 붙였어요");
+
+    if (mapInstanceRef.current && window.naver?.maps) {
+      mapInstanceRef.current.panTo(new window.naver.maps.LatLng(targetLat, targetLng));
     }
   };
 
@@ -211,18 +241,45 @@ export default function App() {
 
   const familyMemos = memos.filter((memo) => memo.shared);
 
+  const handleTabChange = (nextTab: Tab) => {
+    setTab(nextTab);
+    if (nextTab === "home" && mapInstanceRef.current && window.naver?.maps) {
+      setTimeout(() => {
+        if (isDebugLocation) {
+          mapInstanceRef.current.panTo(new window.naver.maps.LatLng(TEST_LAT, TEST_LNG));
+        } else if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const myLatLng = new window.naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+              mapInstanceRef.current.panTo(myLatLng);
+            },
+            () => {
+              mapInstanceRef.current.panTo(new window.naver.maps.LatLng(37.5051, 126.9571));
+            }
+          );
+        } else {
+          mapInstanceRef.current.panTo(new window.naver.maps.LatLng(37.5051, 126.9571));
+        }
+      }, 100);
+    }
+  };
+
   return (
-    <main className="h-full w-full overflow-hidden bg-background" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
+    <main 
+      onClick={handleSecretTap} 
+      className="h-full w-full overflow-hidden bg-background select-none" 
+      style={{ fontFamily: "'Noto Sans KR', sans-serif" }}
+    >
       <section className="relative h-full w-full overflow-hidden bg-background">
         <AnimatePresence mode="wait">
-          {tab === "home" && <HomeScreen key="home" memos={memos} selected={selected} onSelect={setSelected} onCompose={() => setComposerOpen(true)} mapInstanceRef={mapInstanceRef} />}
-          {tab === "family" && <FamilyScreen key="family" memos={familyMemos} setTab={setTab} onSelect={(memo) => { setSelected(memo); setTab("home"); }} />}
-          {tab === "archive" && <ArchiveScreen key="archive" memos={memos.filter((memo) => memo.done)} setTab={setTab} />}
-          {tab === "my" && <MyScreen key="my" memos={memos} setTab={setTab} myMemosOpen={myMemosOpen} setMyMemosOpen={setMyMemosOpen} onSelect={setSelected} />}
+          {tab === "home" && <HomeScreen key="home" memos={memos} selected={selected} onSelect={setSelected} onCompose={() => setComposerOpen(true)} mapInstanceRef={mapInstanceRef} isDebugLocation={isDebugLocation} />}
+          {tab === "family" && <FamilyScreen key="family" memos={familyMemos} setTab={handleTabChange} onSelect={(memo) => { setSelected(memo); handleTabChange("home"); }} />}
+          {tab === "archive" && <ArchiveScreen key="archive" memos={memos.filter((memo) => memo.done)} setTab={handleTabChange} />}
+          {tab === "my" && <MyScreen key="my" memos={memos} setTab={handleTabChange} myMemosOpen={myMemosOpen} setMyMemosOpen={setMyMemosOpen} onSelect={setSelected} />}
         </AnimatePresence>
 
-        {tab === "home" && !selected && <button onClick={() => setArrivalOpen(true)} className="absolute right-5 top-[124px] z-20 flex size-12 items-center justify-center rounded-2xl border border-border bg-white text-primary shadow-[0_10px_30px_rgba(30,40,70,0.16)]" aria-label="도착 알림 미리보기"><BellRing size={20} /></button>}
-        {tab === "home" && <BottomNav tab={tab} setTab={setTab} />}
+        {tab === "home" && !selected && <button onClick={(e) => { e.stopPropagation(); setArrivalOpen(true); }} className="absolute right-5 top-[92px] z-20 flex size-12 items-center justify-center rounded-2xl border border-border bg-white text-primary shadow-[0_10px_30px_rgba(30,40,70,0.16)]" aria-label="도착 알림 미리보기"><BellRing size={20} /></button>}
+        {tab === "home" && <BottomNav tab={tab} setTab={handleTabChange} />}
 
         <AnimatePresence>{selected && <MemoDetail memo={selected} onClose={() => setSelected(null)} onComplete={() => complete(selected)} />}</AnimatePresence>
         <AnimatePresence>{composerOpen && <Composer place={place} content={content} shared={shared} radius={radius} setPlace={setPlace} setContent={setContent} setShared={setShared} setRadius={setRadius} onClose={() => setComposerOpen(false)} onSave={(imgs, cover) => saveMemo(imgs, cover)} />}</AnimatePresence>
@@ -234,7 +291,7 @@ export default function App() {
   );
 }
 
-function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Memo[]; selected: Memo | null; onSelect: (m: Memo) => void; onCompose: () => void; mapInstanceRef: React.MutableRefObject<any> }) {
+function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocation }: { memos: Memo[]; selected: Memo | null; onSelect: (m: Memo) => void; onCompose: () => void; mapInstanceRef: React.MutableRefObject<any>; isDebugLocation: boolean }) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
@@ -262,8 +319,12 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
     if (!isMapLoaded || !mapRef.current) return;
 
     if (!mapInstanceRef.current) {
+      const initialCenter = isDebugLocation 
+        ? new window.naver.maps.LatLng(TEST_LAT, TEST_LNG) 
+        : new window.naver.maps.LatLng(37.5051, 126.9571);
+
       const mapOptions = {
-        center: new window.naver.maps.LatLng(37.5051, 126.9571),
+        center: initialCenter,
         zoom: 16,
         zoomControl: false,
       };
@@ -272,26 +333,35 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
 
     const map = mapInstanceRef.current;
 
-    if (navigator.geolocation && !map._myLocationMarker) {
+    // 내 위치 핀 렌더링
+    const renderMyLocation = (lat: number, lng: number) => {
+      const myLatLng = new window.naver.maps.LatLng(lat, lng);
+      if (!map._myLocationMarker) {
+        map._myLocationMarker = new window.naver.maps.Marker({
+          position: myLatLng,
+          map: map,
+          icon: {
+            content: `
+              <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+                <span style="position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(103,87,255,0.3); background-color: rgba(103,87,255,0.15); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background-color: #6757ff; box-shadow: 0 4px 6px rgba(0,0,0,0.15);"></span>
+              </div>
+            `,
+            anchor: new window.naver.maps.Point(24, 24),
+          },
+        });
+      } else {
+        map._myLocationMarker.setPosition(myLatLng);
+      }
+      map.panTo(myLatLng);
+    };
+
+    if (isDebugLocation) {
+      renderMyLocation(TEST_LAT, TEST_LNG);
+    } else if (navigator.geolocation && !map._myLocationMarker) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          const myLatLng = new window.naver.maps.LatLng(lat, lng);
-
-          map._myLocationMarker = new window.naver.maps.Marker({
-            position: myLatLng,
-            map: map,
-            icon: {
-              content: `
-                <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
-                  <span style="position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(103,87,255,0.3); background-color: rgba(103,87,255,0.15); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-                  <span style="width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background-color: #6757ff; box-shadow: 0 4px 6px rgba(0,0,0,0.15);"></span>
-                </div>
-              `,
-              anchor: new window.naver.maps.Point(24, 24),
-            },
-          });
+          renderMyLocation(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
           console.warn("위치 권한을 불러올 수 없습니다:", error);
@@ -333,7 +403,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
     return () => {
       markers.forEach((marker) => marker.setMap(null));
     };
-  }, [isMapLoaded, memos]);
+  }, [isMapLoaded, memos, isDebugLocation]);
 
   const handleSelectPlace = (place: NaverPlace) => {
     setChosenPlace(place.title);
@@ -359,7 +429,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
       )}
 
       {/* 상단 검색바 */}
-      <div className="absolute left-4 right-4 top-[52px] z-20">
+      <div className="absolute left-4 right-4 top-[20px] z-20" onClick={(e) => e.stopPropagation()}>
         <div className="flex h-12 items-center gap-2 rounded-[17px] border border-[#e7eaf1] bg-white px-4 shadow-[0_10px_30px_rgba(30,40,70,.16)]">
           <Search size={18} className="text-muted-foreground" />
           <input
@@ -376,12 +446,11 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
         <AnimatePresence>
           {searchOpen && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-2 max-h-[60vh] overflow-y-auto rounded-[18px] border border-[#e7eaf1] bg-white shadow-[0_12px_30px_rgba(30,40,70,.14)]">
-              {/* 장소 검색 결과 섹션 */}
               <div>
                 <p className="px-4 pb-1.5 pt-3 text-[13px] font-bold text-foreground">장소 검색 결과</p>
                 {loading && <p className="px-4 py-3 text-[12px] text-muted-foreground">검색 중...</p>}
                 {!loading && places.length === 0 && query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">검색 결과가 없어요</p>}
-                {!loading && !query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">장소 이름을 입력하면 네이버 위치 검색 결과가 표시됩니다</p>}
+                {!loading && !query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">장소 이름을 입력하면 위치 검색 결과가 표시됩니다</p>}
                 {places.map((place, idx) => (
                   <button key={`${place.title}-${idx}`} onClick={() => handleSelectPlace(place)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]">
                     <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#eeecff] text-primary"><MapPin size={15} /></span>
@@ -395,10 +464,8 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
                 ))}
               </div>
 
-              {/* 구분선 */}
               <div className="mx-4 border-t border-[#f0f1f5]" />
 
-              {/* 메모 검색 결과 섹션 */}
               <div>
                 <p className="px-4 pb-1.5 pt-3 text-[13px] font-bold text-foreground">메모 검색 결과</p>
                 {matchedMemos.length === 0 && <p className="px-4 pb-3 text-[12px] text-muted-foreground">{query.trim() ? "일치하는 메모가 없어요" : "장소나 내용으로 메모를 검색할 수 있어요"}</p>}
@@ -419,18 +486,18 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
       </div>
 
       {chosenPlace && (
-        <div className="absolute left-1/2 top-[126px] z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#171a21]/88 px-3 py-2 text-[11px] text-white">
+        <div className="absolute left-1/2 top-[94px] z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#171a21]/88 px-3 py-2 text-[11px] text-white">
           <MapPin size={13} className="text-[#bdb6ff]" />{chosenPlace} 선택됨
         </div>
       )}
 
       {/* 플로팅 + 버튼 */}
-      <button onClick={onCompose} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]">
+      <button onClick={(e) => { e.stopPropagation(); onCompose(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]">
         <Plus size={28} />
       </button>
 
       {/* 하단 메모 트레이 */}
-      <div className="absolute bottom-[91px] left-4 right-4 z-10">
+      <div className="absolute bottom-[91px] left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
         <AnimatePresence mode="wait">
           {memoTrayOpen ? (
             <motion.button key="expanded" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => onSelect(nearby)} className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
@@ -450,13 +517,13 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
   const items: { id: Tab; label: string; icon: typeof Home }[] = [{ id: "home", label: "홈", icon: Home }, { id: "family", label: "모임", icon: UsersRound }, { id: "archive", label: "보관함", icon: Archive }, { id: "my", label: "마이", icon: UserRound }];
-  return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2">{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
+  return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2" onClick={(e) => e.stopPropagation()}>{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
 }
 
 function MemoDetail({ memo, onClose, onComplete }: { memo: Memo; onClose: () => void; onComplete: () => void }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   return (
-    <motion.section initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 300 }} className="absolute inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-[28px] bg-white px-5 pb-8 pt-3 shadow-[0_-18px_42px_rgba(31,39,74,.18)]">
+    <motion.section initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 300 }} className="absolute inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-[28px] bg-white px-5 pb-8 pt-3 shadow-[0_-18px_42px_rgba(31,39,74,.18)]" onClick={(e) => e.stopPropagation()}>
       <div className="mx-auto mb-4 h-1.5 w-11 rounded-full bg-[#d9dce5]" />
       <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
         <div><p className="text-[12px] font-semibold text-primary">장소 메모</p><h2 className="mt-0.5 text-[19px] font-bold">{memo.place}</h2></div>
@@ -564,7 +631,7 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
   const canSave = props.place.trim() && (props.content.trim() || images.length > 0);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]" onClick={(e) => e.stopPropagation()}>
       <AnimatePresence>
         {photoPickerOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPhotoPickerOpen(false)} className="absolute inset-0 z-[80] flex items-end justify-center pb-6">
@@ -617,7 +684,6 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
               <input value={props.place} onChange={(e) => props.setPlace(e.target.value)} placeholder="예: 이마트 흑석점" className="mt-1.5 h-12 w-full rounded-[13px] border border-border bg-[#fafbfe] px-3 text-sm font-normal outline-none focus:border-primary" />
             </label>
             <div>
-              {/* 수정사항 2 반영: 사진 첨부 시에만 (선택) 문구 노출 */}
               <p className="mb-1.5 text-[13px] font-bold">
                 메모 내용 {images.length > 0 && <span className="font-normal text-muted-foreground">(선택)</span>}
               </p>
@@ -686,10 +752,10 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
   );
 }
 
-function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]"><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
+function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]" onClick={(e) => e.stopPropagation()}><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
 
-function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 모임의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">모임 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
+function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 모임의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">모임 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
 
-function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p><h1 className="mt-1 text-[24px] font-bold">보관함</h1><div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">{memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}</div><BottomNav tab="archive" setTab={setTab} /></motion.div>; }
+function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p><h1 className="mt-1 text-[24px] font-bold">보관함</h1><div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">{memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}</div><BottomNav tab="archive" setTab={setTab} /></motion.div>; }
 
-function MyScreen({ memos, setTab, myMemosOpen, setMyMemosOpen, onSelect }: { memos: Memo[]; setTab: (tab: Tab) => void; myMemosOpen: boolean; setMyMemosOpen: (value: boolean) => void; onSelect: (memo: Memo) => void }) { const ownMemos = memos.filter((memo) => memo.author === "나"); return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="flex items-center gap-3"><Avatar name="나" /><div><p className="text-lg font-bold">유연님</p><p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p></div></div>{myMemosOpen ? <div className="mt-7"><button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary"><ChevronLeft size={17} /> 설정으로</button><h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2><div className="space-y-2">{ownMemos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left"><p className="flex items-center gap-1 text-[12px] text-primary"><MapPin size={13} />{memo.place}</p><p className="mt-1 text-[14px] font-medium">{memo.content}</p></button>)}{!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}</div></div> : <div className="mt-7 space-y-3"><button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">내 메모 보기 <MapPin className="float-right text-primary" size={18} /></button><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">알림 설정 <BellRing className="float-right text-primary" size={18} /></div><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">모임 관리 <UsersRound className="float-right text-primary" size={18} /></div></div>}<BottomNav tab="my" setTab={setTab} /></motion.div>; }
+function MyScreen({ memos, setTab, myMemosOpen, setMyMemosOpen, onSelect }: { memos: Memo[]; setTab: (tab: Tab) => void; myMemosOpen: boolean; setMyMemosOpen: (value: boolean) => void; onSelect: (memo: Memo) => void }) { const ownMemos = memos.filter((memo) => memo.author === "나"); return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="flex items-center gap-3"><Avatar name="나" /><div><p className="text-lg font-bold">유연님</p><p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p></div></div>{myMemosOpen ? <div className="mt-7"><button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary"><ChevronLeft size={17} /> 설정으로</button><h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2><div className="space-y-2">{ownMemos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left"><p className="flex items-center gap-1 text-[12px] text-primary"><MapPin size={13} />{memo.place}</p><p className="mt-1 text-[14px] font-medium">{memo.content}</p></button>)}{!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}</div></div> : <div className="mt-7 space-y-3"><button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">내 메모 보기 <MapPin className="float-right text-primary" size={18} /></button><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">알림 설정 <BellRing className="float-right text-primary" size={18} /></div><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">모임 관리 <UsersRound className="float-right text-primary" size={18} /></div></div>}<BottomNav tab="my" setTab={setTab} /></motion.div>; }
