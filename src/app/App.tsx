@@ -121,6 +121,7 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
   const [searchOpen, setSearchOpen] = useState(false);
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
   const [chosenPlace, setChosenPlace] = useState("");
+  const [isMapLoaded, setIsMapLoaded] = useState(false); // 지도 로딩 상태 추가
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -132,21 +133,35 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
 
-  // 네이버 지도 및 마커 연동
   useEffect(() => {
-    if (!mapRef.current || !window.naver) return;
-
-    const mapOptions = {
-      center: new window.naver.maps.LatLng(37.5051, 126.9571),
-      zoom: 15,
-      zoomControl: false,
+    const checkNaverMap = () => {
+      if (window.naver && window.naver.maps) {
+        setIsMapLoaded(true);
+      } else {
+        setTimeout(checkNaverMap, 100); // 로드될 때까지 0.1초마다 재확인
+      }
     };
+    checkNaverMap();
+  }, []);
 
-    const map = new window.naver.maps.Map(mapRef.current, mapOptions);
-    mapInstanceRef.current = map;
+  // 2. 지도가 로드된 후 한 번만 객체 생성
+  useEffect(() => {
+    if (!isMapLoaded || !mapRef.current) return;
 
-    // 네이버 마커 세팅
-    memos.forEach((memo) => {
+    // 이미 지도가 생성되어 있다면 재생성하지 않음 (중복 생성 방지)
+    if (!mapInstanceRef.current) {
+      const mapOptions = {
+        center: new window.naver.maps.LatLng(37.5051, 126.9571),
+        zoom: 15,
+        zoomControl: false,
+      };
+
+      mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
+    }
+
+    const map = mapInstanceRef.current;
+
+    const markers = memos.map((memo) => {
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(memo.lat, memo.lng),
         map: map,
@@ -156,8 +171,14 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
       window.naver.maps.Event.addListener(marker, "click", () => {
         onSelect(memo);
       });
+
+      return marker;
     });
-  }, [memos]);
+// 언마운트 시 마커 정리
+    return () => {
+      markers.forEach((marker) => marker.setMap(null));
+    };
+  }, [isMapLoaded, memos]);
 
   const handleSelectPlace = (place: typeof places[0]) => {
     setChosenPlace(place.name);
@@ -172,10 +193,17 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
-      {/* 네이버 지도가 렌더링되는 레이어 */}
+      {/* 네이버 지도 렌더링 영역 */}
       <div id="map" ref={mapRef} className="h-full w-full" />
 
-      {/* 상단 검색 영역 */}
+      {/* 지도 로딩 중 표시 (선택사항) */}
+      {!isMapLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
+          지도를 불러오는 중입니다...
+        </div>
+      )}
+
+      {/* 상단 검색바 */}
       <div className="absolute left-4 right-4 top-[52px] z-20">
         <div className="flex h-12 items-center gap-2 rounded-[17px] border border-[#e7eaf1] bg-white px-4 shadow-[0_10px_30px_rgba(30,40,70,.16)]">
           <Search size={18} className="text-muted-foreground" />
@@ -211,12 +239,12 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
         </div>
       )}
 
-      {/* 플로팅 + 버튼 */}
+      {/* 플로팅 버튼 */}
       <button onClick={onCompose} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]">
         <Plus size={28} />
       </button>
 
-      {/* 하단 메모 토글/트레이 */}
+      {/* 하단 메모 트레이 */}
       <div className="absolute bottom-[91px] left-4 right-4 z-10">
         <AnimatePresence mode="wait">
           {memoTrayOpen ? (
