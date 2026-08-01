@@ -121,7 +121,7 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
   const [searchOpen, setSearchOpen] = useState(false);
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
   const [chosenPlace, setChosenPlace] = useState("");
-  const [isMapLoaded, setIsMapLoaded] = useState(false); // 지도 로딩 상태 추가
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -133,39 +133,86 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
 
+  // 1. 네이버 지도 SDK 로드 여부 체크
   useEffect(() => {
     const checkNaverMap = () => {
       if (window.naver && window.naver.maps) {
         setIsMapLoaded(true);
       } else {
-        setTimeout(checkNaverMap, 100); // 로드될 때까지 0.1초마다 재확인
+        setTimeout(checkNaverMap, 100);
       }
     };
     checkNaverMap();
   }, []);
 
-  // 2. 지도가 로드된 후 한 번만 객체 생성
+  // 2. 지도 초기화, 커스텀 마커 생성 및 내 위치 연동
   useEffect(() => {
     if (!isMapLoaded || !mapRef.current) return;
 
-    // 이미 지도가 생성되어 있다면 재생성하지 않음 (중복 생성 방지)
     if (!mapInstanceRef.current) {
       const mapOptions = {
         center: new window.naver.maps.LatLng(37.5051, 126.9571),
-        zoom: 15,
+        zoom: 16,
         zoomControl: false,
       };
-
       mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
     }
 
     const map = mapInstanceRef.current;
 
+    // --- A. 내 위치 가져오기 및 지도상에 파란색 애니메이션 핀 표시 ---
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const myLatLng = new window.naver.maps.LatLng(lat, lng);
+
+          // 내 위치 마커 (HTMLMarker 활용)
+          new window.naver.maps.Marker({
+            position: myLatLng,
+            map: map,
+            icon: {
+              content: `
+                <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+                  <span style="position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(103,87,255,0.3); background-color: rgba(103,87,255,0.15); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+                  <span style="width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background-color: #6757ff; box-shadow: 0 4px 6px rgba(0,0,0,0.15);"></span>
+                </div>
+              `,
+              anchor: new window.naver.maps.Point(24, 24),
+            },
+          });
+
+          // 내 위치로 화면 스무스하게 이동
+          map.panTo(myLatLng);
+        },
+        (error) => {
+          console.warn("위치 권한을 불러올 수 없습니다:", error);
+        }
+      );
+    }
+
+    // --- B. 커스텀 이모지 마커 생성 ---
     const markers = memos.map((memo) => {
+      const bgClass = memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#ece9ff]";
+      
+      // 기존 UI 디자인 스타일을 유지하는 HTML 마커 콘텐츠
+      const iconHtml = `
+        <div style="transform: translate(-50%, -100%); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translate(-50%, -100%) scale(1.1)'" onmouseout="this.style.transform='translate(-50%, -100%) scale(1.0)'">
+          <div class="flex size-10 items-center justify-center rounded-2xl border-2 border-white text-[18px] shadow-[0_8px_18px_rgba(45,39,94,.25)] ${bgClass}">
+            ${memo.done ? "✓" : memo.emoji}
+          </div>
+          <span class="mx-auto block h-2 w-2 -translate-y-1 rotate-45 bg-white shadow-sm"></span>
+        </div>
+      `;
+
       const marker = new window.naver.maps.Marker({
         position: new window.naver.maps.LatLng(memo.lat, memo.lng),
         map: map,
-        title: memo.place,
+        icon: {
+          content: iconHtml,
+          anchor: new window.naver.maps.Point(0, 0),
+        },
       });
 
       window.naver.maps.Event.addListener(marker, "click", () => {
@@ -174,7 +221,7 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
 
       return marker;
     });
-// 언마운트 시 마커 정리
+
     return () => {
       markers.forEach((marker) => marker.setMap(null));
     };
@@ -196,7 +243,7 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
       {/* 네이버 지도 렌더링 영역 */}
       <div id="map" ref={mapRef} className="h-full w-full" />
 
-      {/* 지도 로딩 중 표시 (선택사항) */}
+      {/* 지도 로딩 레이어 */}
       {!isMapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
           지도를 불러오는 중입니다...
@@ -239,7 +286,7 @@ function HomeScreen({ memos, onSelect, onCompose }: { memos: Memo[]; selected: M
         </div>
       )}
 
-      {/* 플로팅 버튼 */}
+      {/* 플로팅 + 버튼 */}
       <button onClick={onCompose} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]">
         <Plus size={28} />
       </button>
