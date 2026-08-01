@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 
-// TypeScript에서 window.naver 객체를 인식하도록 선언
+// TypeScript에서 window.naver 및 geocode 연동 인식 선언
 declare global {
   interface Window {
     naver: any;
@@ -29,7 +29,7 @@ declare global {
 
 type Tab = "home" | "family" | "archive" | "my";
 
-// Memo 타입 정의 (images, coverImage 필드 포함)
+// Memo 타입 정의
 type Memo = {
   id: number;
   place: string;
@@ -47,36 +47,68 @@ type Memo = {
   coverImage?: string;
 };
 
-// 네이버 장소 검색 타입 및 목 데이터
-type NaverPlace = { title: string; category: string; address: string; roadAddress: string };
+// 네이버 장소 검색 API 응답 타입
+type NaverPlace = {
+  title: string;
+  category: string;
+  address: string;
+  roadAddress: string;
+  mapx?: string;
+  mapy?: string;
+};
 
-const MOCK_NAVER_DB: NaverPlace[] = [
-  { title: "이마트 흑석점", category: "대형마트", address: "서울특별시 동작구 흑석동 97", roadAddress: "서울특별시 동작구 흑석로 97" },
-  { title: "중앙약국", category: "약국", address: "서울특별시 동작구 흑석동 102", roadAddress: "서울특별시 동작구 흑석로 102" },
-  { title: "중앙대학교 정문", category: "대학교", address: "서울특별시 동작구 흑석동 84", roadAddress: "서울특별시 동작구 흑석로 84" },
-  { title: "흑석한강공원", category: "공원", address: "서울특별시 동작구 흑석동 1", roadAddress: "서울특별시 동작구 흑석로 1" },
-  { title: "이마트24 흑석점", category: "편의점", address: "서울특별시 동작구 흑석동 201", roadAddress: "서울특별시 동작구 흑석로 201" },
-];
+// HTML 태그 제거용 유틸리티 (네이버 API는 title에 <b> 태그를 포함하여 반환함)
+function stripHtmlTags(str: string) {
+  return str.replace(/<[^>]*>?/gm, "");
+}
 
+// 네이버 지역 검색 커스텀 훅 (실제 프록시 API 연동)
 function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: boolean } {
   const [places, setPlaces] = useState<NaverPlace[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!query.trim()) { setPlaces([]); return; }
+    if (!query.trim()) {
+      setPlaces([]);
+      return;
+    }
+
     setLoading(true);
     const timer = window.setTimeout(() => {
-      const q = query.trim();
-      setPlaces(MOCK_NAVER_DB.filter((p) => p.title.includes(q) || p.category.includes(q)));
-      setLoading(false);
-    }, 320);
+      // 프록시 API 엔드포인트 호출 (/api/naver-search)
+      fetch(`/api/naver-search?query=${encodeURIComponent(query.trim())}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("네이버 검색 API 호출 실패");
+          return res.json();
+        })
+        .then((data) => {
+          // 네이버 검색 API 결과 items 매핑 및 HTML 태그 정화
+          const items: NaverPlace[] = (data.items || []).map((item: any) => ({
+            title: stripHtmlTags(item.title),
+            category: item.category,
+            address: item.address,
+            roadAddress: item.roadAddress || item.address,
+            mapx: item.mapx,
+            mapy: item.mapy,
+          }));
+          setPlaces(items);
+        })
+        .catch((err) => {
+          console.warn("API 연동 에러 또는 목업 데이터 처리:", err);
+          setPlaces([]);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }, 350);
+
     return () => window.clearTimeout(timer);
   }, [query]);
 
   return { places, loading };
 }
 
-// 흑석동 근처 실제 위경도가 적용된 데이터
+// 초기 메모 데이터
 const initialMemos: Memo[] = [
   { id: 1, place: "이마트 흑석점", content: "우유, 계란, 휴지 사오기", author: "엄마", emoji: "🛒", shared: true, radius: 100, time: "오늘 오후 7:00까지", lat: 37.5082, lng: 126.9635 },
   { id: 2, place: "중앙약국", content: "할머니 약 받아오기", author: "아빠", emoji: "💊", shared: true, radius: 300, time: "내일 오전 11:00까지", lat: 37.5071, lng: 126.9585 },
@@ -116,33 +148,31 @@ export default function App() {
 
   const saveMemo = (images: string[], coverImage: string) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
-    
-    // 새 메모 기본 좌표 (중앙대 정문 인근 약간의 랜덤 오프셋 적용)
+
     const targetLat = 37.5051 + (Math.random() - 0.5) * 0.002;
     const targetLng = 126.9571 + (Math.random() - 0.5) * 0.002;
 
-    const memo: Memo = { 
-      id: Date.now(), 
-      place, 
-      content, 
-      author: "나", 
-      emoji: "📍", 
-      shared, 
-      radius, 
-      time: "방금 저장됨", 
-      lat: targetLat, 
-      lng: targetLng, 
-      images, 
-      coverImage: coverImage || undefined 
+    const memo: Memo = {
+      id: Date.now(),
+      place,
+      content,
+      author: "나",
+      emoji: "📍",
+      shared,
+      radius,
+      time: "방금 저장됨",
+      lat: targetLat,
+      lng: targetLng,
+      images,
+      coverImage: coverImage || undefined,
     };
-    
+
     setMemos((items) => [memo, ...items]);
-    setComposerOpen(false); 
-    setPlace(""); 
-    setContent(""); 
+    setComposerOpen(false);
+    setPlace("");
+    setContent("");
     setToast("이 장소에 메모를 붙였어요");
 
-    // 지도가 로드되어 있다면 저장된 위치로 카메라 이동
     if (mapInstanceRef.current && window.naver && window.naver.maps) {
       const targetLatLng = new window.naver.maps.LatLng(targetLat, targetLng);
       mapInstanceRef.current.panTo(targetLatLng);
@@ -193,7 +223,6 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
 
-  // 1. 네이버 지도 SDK 로드 여부 체크
   useEffect(() => {
     const checkNaverMap = () => {
       if (window.naver && window.naver.maps) {
@@ -205,7 +234,6 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
     checkNaverMap();
   }, []);
 
-  // 2. 지도 초기화, 커스텀 마커 생성 및 내 위치 연동
   useEffect(() => {
     if (!isMapLoaded || !mapRef.current) return;
 
@@ -220,7 +248,6 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
 
     const map = mapInstanceRef.current;
 
-    // 내 위치 마커 생성 (최초 1회)
     if (navigator.geolocation && !map._myLocationMarker) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -248,13 +275,12 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
       );
     }
 
-    // 커스텀 이모지 및 커버이미지 마커 생성
     const markers = memos.map((memo) => {
       const bgClass = memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#ece9ff]";
       const innerContent = memo.coverImage
         ? `<img src="${memo.coverImage}" class="size-full object-cover rounded-2xl" />`
         : memo.done ? "✓" : memo.emoji;
-      
+
       const iconHtml = `
         <div style="transform: translate(-50%, -100%); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translate(-50%, -100%) scale(1.1)'" onmouseout="this.style.transform='translate(-50%, -100%) scale(1.0)'">
           <div class="flex size-10 items-center justify-center overflow-hidden rounded-2xl border-2 border-white text-[18px] shadow-[0_8px_18px_rgba(45,39,94,.25)] ${bgClass}">
@@ -285,12 +311,33 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
     };
   }, [isMapLoaded, memos]);
 
+  // 검색 결과 장소 클릭 시 지도를 해당 위치로 이동하는 처리
+  const handleSelectPlace = (place: NaverPlace) => {
+    setChosenPlace(place.title);
+    setQuery(place.title);
+    setSearchOpen(false);
+
+    if (!mapInstanceRef.current || !window.naver?.maps) return;
+
+    // 1) Naver Geocoding 서비스 활용 (submodules=geocoding이 index.html에 추가된 경우)
+    if (window.naver.maps.Service && window.naver.maps.Service.geocode) {
+      window.naver.maps.Service.geocode(
+        { query: place.roadAddress || place.address },
+        (status: any, response: any) => {
+          if (status === window.naver.maps.Service.Status.OK && response.v2.addresses.length > 0) {
+            const item = response.v2.addresses[0];
+            const moveLatLng = new window.naver.maps.LatLng(Number(item.y), Number(item.x));
+            mapInstanceRef.current.panTo(moveLatLng);
+          }
+        }
+      );
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
-      {/* 네이버 지도 렌더링 영역 */}
       <div id="map" ref={mapRef} className="h-full w-full" />
 
-      {/* 지도 로딩 레이어 */}
       {!isMapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
           지도를 불러오는 중입니다...
@@ -320,9 +367,9 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
                 <p className="px-4 pb-1.5 pt-3 text-[13px] font-bold text-foreground">장소 검색 결과</p>
                 {loading && <p className="px-4 py-3 text-[12px] text-muted-foreground">검색 중...</p>}
                 {!loading && places.length === 0 && query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">검색 결과가 없어요</p>}
-                {!loading && !query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">장소 이름을 입력하면 검색 결과가 표시됩니다</p>}
-                {places.map((place) => (
-                  <button key={place.title} onClick={() => { setChosenPlace(place.title); setQuery(place.title); setSearchOpen(false); }} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]">
+                {!loading && !query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">장소 이름을 입력하면 네이버 지역 검색 결과가 표시됩니다</p>}
+                {places.map((place, idx) => (
+                  <button key={`${place.title}-${idx}`} onClick={() => handleSelectPlace(place)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]">
                     <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#eeecff] text-primary"><MapPin size={15} /></span>
                     <span className="min-w-0">
                       <b className="block truncate text-[13px] font-bold">{place.title}</b>
@@ -390,7 +437,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef }: { memos: Mem
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: { id: Tab; label: string; icon: typeof Home }[] = [{ id: "home", label: "홈", icon: Home }, { id: "family", label: "모임", icon: UsersRound }, { id: "archive", label: "보관함", icon: Archive }, { id: "my", label: "마이", icon: UserRound }];
+  const items: { id: Tab; label: string; icon: typeof Home }[] = [{ id: "home", label: "홈", icon: Home }, { id: "family", label: "가족", icon: UsersRound }, { id: "archive", label: "보관함", icon: Archive }, { id: "my", label: "마이", icon: UserRound }];
   return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2">{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
 }
 
@@ -506,7 +553,6 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]">
-      {/* 사진 선택 방식 팝업 */}
       <AnimatePresence>
         {photoPickerOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPhotoPickerOpen(false)} className="absolute inset-0 z-[80] flex items-end justify-center pb-6">
@@ -528,7 +574,6 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
           </motion.div>
         )}
       </AnimatePresence>
-      {/* 카메라 권한 거부 팝업 */}
       <AnimatePresence>
         {cameraPermissionDenied && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[80] flex items-center justify-center bg-black/30 px-6">
@@ -546,9 +591,7 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
           </motion.div>
         )}
       </AnimatePresence>
-      {/* 갤러리용 input */}
       <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
-      {/* 카메라용 input */}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
       <motion.section initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 29, stiffness: 300 }} className="absolute inset-x-0 bottom-0 flex max-h-[90vh] flex-col rounded-t-[28px] bg-white px-5 pb-8 pt-3">
         <div className="mx-auto mb-4 h-1.5 w-11 shrink-0 rounded-full bg-[#d9dce5]" />
@@ -613,7 +656,7 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
               <p className="mb-2 text-[13px] font-bold">공개 범위</p>
               <div className="grid grid-cols-2 rounded-[13px] bg-[#f3f4f8] p-1">
                 <button onClick={() => props.setShared(false)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${!props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>나만 보기</button>
-                <button onClick={() => props.setShared(true)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>모임 공유</button>
+                <button onClick={() => props.setShared(true)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>가족 공유</button>
               </div>
             </div>
             <div>
@@ -630,7 +673,7 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
 
 function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]"><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
 
-function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 모임의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">모임 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
+function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 가족의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">가족 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
 
 function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]"><p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p><h1 className="mt-1 text-[24px] font-bold">보관함</h1><div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">{memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}</div><BottomNav tab="archive" setTab={setTab} /></motion.div>; }
 
