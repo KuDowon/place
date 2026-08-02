@@ -189,7 +189,7 @@ export default function App() {
   const [myMemosOpen, setMyMemosOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Memo | null>(null);
   
-  // 현재 기기실제 위치 저장을 위한 상태
+  // 현재 기기 실제 위치 저장을 위한 상태
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 개발자 테스트용 상태 (5회 연속 클릭 트리거)
@@ -274,6 +274,20 @@ export default function App() {
     setSelected((memo) => (memo?.id === id ? { ...memo, ...patch } : memo));
   };
 
+  // 일반 + 버튼을 눌러 메모 작성 열기 (현 위치에 작성 준비)
+  const openComposerWithCurrentLocation = () => {
+    setPlace("");
+    setSelectedPlace(null);
+    setComposerOpen(true);
+  };
+
+  // 검색된 특정 장소 카드에서 메모 작성 열기
+  const openComposerWithPlace = (targetPlace: NaverPlace) => {
+    setPlace(targetPlace.title);
+    setSelectedPlace(targetPlace);
+    setComposerOpen(true);
+  };
+
   const saveMemo = (images: string[], coverImage: string) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
 
@@ -289,7 +303,7 @@ export default function App() {
       targetLat = TEST_LAT;
       targetLng = TEST_LNG;
     } else if (userLocation) {
-      // 3. 기기의 실제 현재 위치 사용 (현재 위치 부착 오류 해결)
+      // 3. 기기의 실제 현재 위치 사용
       targetLat = userLocation.lat;
       targetLng = userLocation.lng;
     } else if (mapInstanceRef.current && window.naver?.maps) {
@@ -325,7 +339,7 @@ export default function App() {
     setPlace("");
     setSelectedPlace(null);
     setContent("");
-    setToast("현재 위치에 메모를 붙였어요");
+    setToast("장소에 메모를 붙였어요");
 
     if ("Notification" in window && window.Notification.permission === "default") {
       void window.Notification.requestPermission();
@@ -430,7 +444,18 @@ export default function App() {
     >
       <section className="relative h-full w-full overflow-hidden bg-background">
         <AnimatePresence mode="wait">
-          {tab === "home" && <HomeScreen key="home" memos={activeMemos} selected={selected} onSelect={setSelected} onCompose={() => setComposerOpen(true)} mapInstanceRef={mapInstanceRef} isDebugLocation={isDebugLocation} />}
+          {tab === "home" && (
+            <HomeScreen 
+              key="home" 
+              memos={activeMemos} 
+              selected={selected} 
+              onSelect={setSelected} 
+              onComposeCurrent={openComposerWithCurrentLocation}
+              onComposePlace={openComposerWithPlace}
+              mapInstanceRef={mapInstanceRef} 
+              isDebugLocation={isDebugLocation} 
+            />
+          )}
           {tab === "family" && <FamilyScreen key="family" memos={familyMemos} setTab={handleTabChange} onSelect={(memo) => { setSelected(memo); handleTabChange("home"); }} />}
           {tab === "archive" && <ArchiveScreen key="archive" memos={archivedMemos} setTab={handleTabChange} onSelect={setSelected} onRequestDelete={setDeleteTarget} />}
           {tab === "my" && <MyScreen key="my" memos={activeMemos} setTab={handleTabChange} myMemosOpen={myMemosOpen} setMyMemosOpen={setMyMemosOpen} onSelect={setSelected} onRequestDelete={setDeleteTarget} />}
@@ -450,20 +475,39 @@ export default function App() {
   );
 }
 
-function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocation }: { memos: Memo[]; selected: Memo | null; onSelect: (m: Memo) => void; onCompose: () => void; mapInstanceRef: React.MutableRefObject<any>; isDebugLocation: boolean }) {
+function HomeScreen({ 
+  memos, 
+  onSelect, 
+  onComposeCurrent,
+  onComposePlace,
+  mapInstanceRef, 
+  isDebugLocation 
+}: { 
+  memos: Memo[]; 
+  selected: Memo | null; 
+  onSelect: (m: Memo) => void; 
+  onComposeCurrent: () => void;
+  onComposePlace: (place: NaverPlace) => void;
+  mapInstanceRef: React.MutableRefObject<any>; 
+  isDebugLocation: boolean 
+}) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const mapRef = useRef<HTMLDivElement>(null);
+  
+  // 새로 검색해서 선택한 장소 정보 저장 상태
+  const [searchedPlaceCard, setSearchedPlaceCard] = useState<NaverPlace | null>(null);
 
-  // 2번 & 3번 수정사항: 검색바에서 API 연결 제거 및 목업 장소 + 내가 작성한 모든 메모가 검색되도록 처리
+  const mapRef = useRef<HTMLDivElement>(null);
+  const searchedMarkerRef = useRef<any>(null);
+
   const q = query.trim().toLowerCase();
   
-  // 1) 내가 작성했거나 생성되어 있는 메모 중 검색
+  // 작성된 메모 검색
   const matchedMemos = q ? memos.filter((m) => m.place.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.address && m.address.toLowerCase().includes(q))) : [];
 
-  // 2) 목업 장소 중에서 검색
+  // 목업 장소 검색
   const matchedPlaces = q ? MOCK_PLACES.filter((p) => p.title.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || p.address.toLowerCase().includes(q) || p.roadAddress.toLowerCase().includes(q)) : [];
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
@@ -558,6 +602,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
       });
 
       window.naver.maps.Event.addListener(marker, "click", () => {
+        setSearchedPlaceCard(null); // 다른 메모 클릭 시 검색 카드 닫기
         onSelect(memo);
       });
 
@@ -569,18 +614,48 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
     };
   }, [isMapLoaded, memos, isDebugLocation]);
 
-  // 검색된 장소 클릭 시 해당 지도 위치로 이동
+  // 장소 클릭 시 해당 장소로 위치 이동 및 마커/카드 렌더링
   const handleSelectPlaceMock = (place: NaverPlace) => {
     setSearchOpen(false);
     setQuery("");
+    setSearchedPlaceCard(place);
+
     if (mapInstanceRef.current && window.naver?.maps && place.lat && place.lng) {
-      mapInstanceRef.current.panTo(new window.naver.maps.LatLng(place.lat, place.lng));
+      const targetLatLng = new window.naver.maps.LatLng(place.lat, place.lng);
+      mapInstanceRef.current.panTo(targetLatLng);
+
+      // 이전 임시 장소 마커 제거 후 신규 추가
+      if (searchedMarkerRef.current) {
+        searchedMarkerRef.current.setMap(null);
+      }
+
+      searchedMarkerRef.current = new window.naver.maps.Marker({
+        position: targetLatLng,
+        map: mapInstanceRef.current,
+        icon: {
+          content: `
+            <div style="transform: translate(-50%, -100%); cursor: pointer;">
+              <div class="flex size-11 items-center justify-center rounded-2xl border-2 border-white bg-primary text-white shadow-lg">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              </div>
+            </div>
+          `,
+          anchor: new window.naver.maps.Point(0, 0),
+        },
+      });
+    }
+  };
+
+  const closeSearchedCard = () => {
+    setSearchedPlaceCard(null);
+    if (searchedMarkerRef.current) {
+      searchedMarkerRef.current.setMap(null);
     }
   };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
-      <div id="map" ref={mapRef} className="h-full w-full" />
+      <div id="map" ref={mapRef} className="h-full w-full" onClick={closeSearchedCard} />
 
       {!isMapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-sm text-gray-500">
@@ -612,7 +687,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
                   <div className="mb-2">
                     <p className="px-3 pb-1 pt-2 text-[11px] font-bold text-primary">내 메모 목록 ({matchedMemos.length})</p>
                     {matchedMemos.map((memo) => (
-                      <button key={memo.id} onClick={() => { setSearchOpen(false); setQuery(""); onSelect(memo); }} className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#fafbfe]">
+                      <button key={memo.id} onClick={() => { setSearchOpen(false); setQuery(""); setSearchedPlaceCard(null); onSelect(memo); }} className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#fafbfe]">
                         <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#f3f4f8] text-base">{memo.emoji}</span>
                         <span className="min-w-0">
                           <b className="block truncate text-[13px] font-bold">{memo.place}</b>
@@ -652,26 +727,71 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
         </AnimatePresence>
       </div>
 
-      {/* 플로팅 + 버튼 */}
-      <button onClick={(e) => { e.stopPropagation(); onCompose(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(0,196,184,.35)]">
+      {/* 플로팅 + 버튼 (현 위치 메모 작성) */}
+      <button onClick={(e) => { e.stopPropagation(); onComposeCurrent(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(0,196,184,.35)]">
         <Plus size={28} />
       </button>
 
+      {/* 검색한 장소 정보 카드 및 메모 작성 유도 버튼 */}
+      <AnimatePresence>
+        {searchedPlaceCard && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="absolute bottom-[96px] left-4 right-4 z-30 rounded-[22px] border border-white bg-white/95 p-4 shadow-[0_15px_35px_rgba(30,40,70,.18)] backdrop-blur"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#e0f9f7] text-primary">
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-foreground">{searchedPlaceCard.title}</h3>
+                    <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{searchedPlaceCard.category}</span>
+                  </div>
+                  <p className="mt-0.5 text-[12px] text-muted-foreground">{searchedPlaceCard.roadAddress || searchedPlaceCard.address}</p>
+                </div>
+              </div>
+              <button onClick={closeSearchedCard} className="flex size-7 items-center justify-center rounded-full bg-gray-100 text-muted-foreground">
+                <X size={15} />
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                const target = searchedPlaceCard;
+                closeSearchedCard();
+                onComposePlace(target);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md active:scale-[0.99]"
+            >
+              <Plus size={18} /> 이 장소에 메모를 작성할까요?
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 하단 메모 트레이 */}
-      <div className="absolute bottom-[91px] left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
-        <AnimatePresence mode="wait">
-          {memoTrayOpen && nearby ? (
-            <motion.button key="expanded" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => onSelect(nearby)} className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
-              <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold text-primary">가까운 메모 · 120m</span><span onClick={(event) => { event.stopPropagation(); setMemoTrayOpen(false); }} className="rounded-lg bg-[#f3f4f8] px-2 py-1 text-[10px] text-muted-foreground">내리기</span></div>
-              <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#e0f9f7]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div>
-            </motion.button>
-          ) : (
-            <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
-              <MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#e0f9f7] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </div>
+      {!searchedPlaceCard && (
+        <div className="absolute bottom-[91px] left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
+          <AnimatePresence mode="wait">
+            {memoTrayOpen && nearby ? (
+              <motion.button key="expanded" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => onSelect(nearby)} className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
+                <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold text-primary">가까운 메모 · 120m</span><span onClick={(event) => { event.stopPropagation(); setMemoTrayOpen(false); }} className="rounded-lg bg-[#f3f4f8] px-2 py-1 text-[10px] text-muted-foreground">내리기</span></div>
+                <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#e0f9f7]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div>
+              </motion.button>
+            ) : (
+              <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
+                <MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#e0f9f7] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </motion.div>
   );
 }
