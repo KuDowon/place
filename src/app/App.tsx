@@ -96,6 +96,23 @@ function formatDistance(distance?: number) {
   return `${(distance / 1000).toFixed(1)}km`;
 }
 
+// 카테고리 기반 이모지 자동 부여 (실패 시 내용 첫 글자 사용)
+function getEmojiByCategory(category?: string, content?: string, place?: string): string {
+  if (category) {
+    if (category.includes("마트") || category.includes("편의점") || category.includes("생활용품")) return "🛒";
+    if (category.includes("약국") || category.includes("병원")) return "💊";
+    if (category.includes("학교") || category.includes("대학교")) return "🎓";
+    if (category.includes("공원") || category.includes("산")) return "🌳";
+    if (category.includes("식당") || category.includes("음식점") || category.includes("카페")) return "☕";
+  }
+  // 기본 대체 로직: 내용 또는 장소명의 첫 글자
+  const sourceText = content?.trim() || place?.trim();
+  if (sourceText) {
+    return sourceText.charAt(0);
+  }
+  return "📍";
+}
+
 // 작성 모달 장소 검색용 (목업 기반 필터링)
 function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: boolean } {
   const [places, setPlaces] = useState<NaverPlace[]>([]);
@@ -126,7 +143,7 @@ function initialMemos(): Memo[] {
   return [
     { id: 1, place: "이마트 흑석점", content: "우유, 계란, 휴지 사오기", author: "엄마", emoji: "🛒", shared: true, radius: 100, time: "22시간 남음", lat: 37.5082, lng: 126.9635, address: "서울특별시 동작구 흑석로 97", createdAt: new Date(now - 2 * HOUR).toISOString(), expiresAt: new Date(now + 22 * HOUR).toISOString(), archived: false },
     { id: 2, place: "중앙약국", content: "할머니 약 받아오기", author: "아빠", emoji: "💊", shared: true, radius: 300, time: "19시간 남음", lat: 37.5071, lng: 126.9585, address: "서울특별시 동작구 흑석로 102", createdAt: new Date(now - 5 * HOUR).toISOString(), expiresAt: new Date(now + 19 * HOUR).toISOString(), archived: false },
-    { id: 3, place: "중앙대학교 정문", content: "학생지원팀에서 증명서 출력하기", author: "나", emoji: "✅", shared: false, radius: 100, time: "23시간 남음", lat: 37.5051, lng: 126.9571, address: "서울특별시 동작구 흑석로 84", createdAt: new Date(now - HOUR).toISOString(), expiresAt: new Date(now + 23 * HOUR).toISOString(), archived: true, archivedAt: new Date(now - 30 * 60 * 1000).toISOString() },
+    { id: 3, place: "중앙대학교 정문", content: "학생지원팀에서 증명서 출력하기", author: "나", emoji: "🎓", shared: false, radius: 100, time: "23시간 남음", lat: 37.5051, lng: 126.9571, address: "서울특별시 동작구 흑석로 84", createdAt: new Date(now - HOUR).toISOString(), expiresAt: new Date(now + 23 * HOUR).toISOString(), archived: true, archivedAt: new Date(now - 30 * 60 * 1000).toISOString() },
   ];
 }
 
@@ -189,7 +206,7 @@ export default function App() {
   const [myMemosOpen, setMyMemosOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Memo | null>(null);
   
-  // 현재 기기 실제 위치 저장을 위한 상태
+  // 현재 기기 실제 위치
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 개발자 테스트용 상태 (5회 연속 클릭 트리거)
@@ -224,7 +241,7 @@ export default function App() {
     try {
       window.localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memos));
     } catch {
-      // 사진 데이터가 커서 저장 공간이 부족해도 현재 화면은 계속 사용할 수 있습니다.
+      // 사진 데이터 용량 초과 대응
     }
   }, [memos]);
 
@@ -274,45 +291,42 @@ export default function App() {
     setSelected((memo) => (memo?.id === id ? { ...memo, ...patch } : memo));
   };
 
-  // 일반 + 버튼을 눌러 메모 작성 열기 (현 위치에 작성 준비)
   const openComposerWithCurrentLocation = () => {
     setPlace("");
     setSelectedPlace(null);
     setComposerOpen(true);
   };
 
-  // 검색된 특정 장소 카드에서 메모 작성 열기
   const openComposerWithPlace = (targetPlace: NaverPlace) => {
     setPlace(targetPlace.title);
     setSelectedPlace(targetPlace);
     setComposerOpen(true);
   };
 
+  // 장소에 메모 저장하기
   const saveMemo = (images: string[], coverImage: string) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
 
     let targetLat = TEST_LAT;
     let targetLng = TEST_LNG;
 
-    // 1. 장소 목업 선택이 있으면 해당 좌표 지정
     if (selectedPlace?.lat && selectedPlace?.lng) {
       targetLat = selectedPlace.lat;
       targetLng = selectedPlace.lng;
     } else if (isDebugLocation) {
-      // 2. 개발자 모드면 테스트 좌표 사용
       targetLat = TEST_LAT;
       targetLng = TEST_LNG;
     } else if (userLocation) {
-      // 3. 기기의 실제 현재 위치 사용
       targetLat = userLocation.lat;
       targetLng = userLocation.lng;
     } else if (mapInstanceRef.current && window.naver?.maps) {
-      // 4. 지도 중앙 좌표
       const center = mapInstanceRef.current.getCenter();
       targetLat = center.lat();
       targetLng = center.lng();
     }
 
+    // 카테고리 기반 이모지 지정 (실패 시 내용 첫 글자)
+    const memoEmoji = getEmojiByCategory(selectedPlace?.category, content, place);
     const createdAt = new Date().toISOString();
 
     const memo: Memo = {
@@ -320,7 +334,7 @@ export default function App() {
       place,
       content,
       author: "나",
-      emoji: "📍",
+      emoji: memoEmoji,
       shared,
       radius,
       time: "24시간 남음",
@@ -339,7 +353,7 @@ export default function App() {
     setPlace("");
     setSelectedPlace(null);
     setContent("");
-    setToast("장소에 메모를 붙였어요");
+    setToast("장소에 메모를 부착하고 핀을 꼽았어요!");
 
     if ("Notification" in window && window.Notification.permission === "default") {
       void window.Notification.requestPermission();
@@ -380,6 +394,7 @@ export default function App() {
   const arrivalMemo = activeMemos.find((memo) => memo.id === 1);
   const shownArrivalMemo = arrivalTarget ?? arrivalMemo;
 
+  // 위치 감지 및 푸시 알림 (파비콘 포함)
   useEffect(() => {
     if (!navigator.geolocation || activeMemos.length === 0) return;
 
@@ -399,10 +414,11 @@ export default function App() {
           try {
             new window.Notification(`${nearbyMemo.place} 근처에 도착했어요!`, {
               body: nearbyMemo.content || "이 장소에 남겨둔 메모를 확인해보세요.",
+              icon: "/favicon.ico", // 파비콘 설정 반영
               tag: `place-memo-${nearbyMemo.id}`,
             });
           } catch {
-            // 일부 모바일 브라우저는 앱 안의 도착 카드만 지원합니다.
+            // 모바일 브라우저 예외 처리
           }
         }
       },
@@ -496,7 +512,6 @@ function HomeScreen({
   const [memoTrayOpen, setMemoTrayOpen] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   
-  // 새로 검색해서 선택한 장소 정보 저장 상태
   const [searchedPlaceCard, setSearchedPlaceCard] = useState<NaverPlace | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -504,10 +519,7 @@ function HomeScreen({
 
   const q = query.trim().toLowerCase();
   
-  // 작성된 메모 검색
   const matchedMemos = q ? memos.filter((m) => m.place.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.address && m.address.toLowerCase().includes(q))) : [];
-
-  // 목업 장소 검색
   const matchedPlaces = q ? MOCK_PLACES.filter((p) => p.title.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || p.address.toLowerCase().includes(q) || p.roadAddress.toLowerCase().includes(q)) : [];
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
@@ -541,7 +553,6 @@ function HomeScreen({
 
     const map = mapInstanceRef.current;
 
-    // 내 위치 핀 렌더링
     const renderMyLocation = (lat: number, lng: number) => {
       const myLatLng = new window.naver.maps.LatLng(lat, lng);
       if (!map._myLocationMarker) {
@@ -577,11 +588,12 @@ function HomeScreen({
       );
     }
 
+    // 부착된 모든 메모 핀 지도상에 렌더링
     const markers = memos.map((memo) => {
       const bgClass = memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#e0f9f7]";
       const innerContent = memo.coverImage
         ? `<img src="${memo.coverImage}" class="size-full object-cover rounded-2xl" />`
-        : memo.done ? "✓" : memo.emoji;
+        : memo.done ? "✓" : `<span style="font-size:16px; font-weight:bold;">${memo.emoji}</span>`;
 
       const iconHtml = `
         <div style="transform: translate(-50%, -100%); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translate(-50%, -100%) scale(1.1)'" onmouseout="this.style.transform='translate(-50%, -100%) scale(1.0)'">
@@ -602,7 +614,7 @@ function HomeScreen({
       });
 
       window.naver.maps.Event.addListener(marker, "click", () => {
-        setSearchedPlaceCard(null); // 다른 메모 클릭 시 검색 카드 닫기
+        setSearchedPlaceCard(null);
         onSelect(memo);
       });
 
@@ -614,7 +626,6 @@ function HomeScreen({
     };
   }, [isMapLoaded, memos, isDebugLocation]);
 
-  // 장소 클릭 시 해당 장소로 위치 이동 및 마커/카드 렌더링
   const handleSelectPlaceMock = (place: NaverPlace) => {
     setSearchOpen(false);
     setQuery("");
@@ -624,7 +635,6 @@ function HomeScreen({
       const targetLatLng = new window.naver.maps.LatLng(place.lat, place.lng);
       mapInstanceRef.current.panTo(targetLatLng);
 
-      // 이전 임시 장소 마커 제거 후 신규 추가
       if (searchedMarkerRef.current) {
         searchedMarkerRef.current.setMap(null);
       }
@@ -682,7 +692,6 @@ function HomeScreen({
           {searchOpen && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-2 max-h-[60vh] overflow-y-auto rounded-[18px] border border-[#e7eaf1] bg-white shadow-[0_12px_30px_rgba(30,40,70,.14)]">
               <div className="p-2">
-                {/* 1. 작성된 메모 검색 목록 */}
                 {matchedMemos.length > 0 && (
                   <div className="mb-2">
                     <p className="px-3 pb-1 pt-2 text-[11px] font-bold text-primary">내 메모 목록 ({matchedMemos.length})</p>
@@ -698,7 +707,6 @@ function HomeScreen({
                   </div>
                 )}
 
-                {/* 2. 장소 목업 검색 목록 */}
                 {matchedPlaces.length > 0 && (
                   <div>
                     <p className="px-3 pb-1 pt-2 text-[11px] font-bold text-muted-foreground">장소 목록 ({matchedPlaces.length})</p>
@@ -714,7 +722,6 @@ function HomeScreen({
                   </div>
                 )}
 
-                {/* 결과 없음 표시 */}
                 {q && matchedMemos.length === 0 && matchedPlaces.length === 0 && (
                   <p className="px-4 py-4 text-center text-[12px] text-muted-foreground">일치하는 장소나 메모가 없어요</p>
                 )}
@@ -727,12 +734,12 @@ function HomeScreen({
         </AnimatePresence>
       </div>
 
-      {/* 플로팅 + 버튼 (현 위치 메모 작성) */}
+      {/* 플로팅 + 버튼 */}
       <button onClick={(e) => { e.stopPropagation(); onComposeCurrent(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(0,196,184,.35)]">
         <Plus size={28} />
       </button>
 
-      {/* 검색한 장소 정보 카드 및 메모 작성 유도 버튼 */}
+      {/* 검색 장소 정보 카드 */}
       <AnimatePresence>
         {searchedPlaceCard && (
           <motion.div
@@ -785,7 +792,7 @@ function HomeScreen({
                 <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#e0f9f7]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div>
               </motion.button>
             ) : (
-              <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
+              <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 0, opacity: 1 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
                 <MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#e0f9f7] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
               </motion.button>
             )}
@@ -1187,12 +1194,15 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
   );
 }
 
+// 근처 도착 알림 카드 (파비콘 아이콘 노출 반영)
 function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) {
   return (
     <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]" onClick={(e) => e.stopPropagation()}>
       <div className="mb-3 flex items-start gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e0f9f7] text-xl">🛒</div>
-        <div><p className="text-[16px] font-bold">마트 근처에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div>
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e0f9f7] p-2">
+          <img src="/favicon.ico" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} className="size-6 object-contain" alt="파비콘" />
+        </div>
+        <div><p className="text-[16px] font-bold">{memo.place} 근처에 도착했어요!</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">{memo.author}가 남긴 심부름 — {memo.content}</p></div>
       </div>
       <div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div>
     </motion.section>
