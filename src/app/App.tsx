@@ -21,7 +21,6 @@ import {
   Video,
   X,
 } from "lucide-react";
-import mapTexture from "../imports/DivApp/9db94bf4b097dba134e80a2bc7fd4238620c3e3a.png";
 
 declare global {
   interface Window {
@@ -712,6 +711,65 @@ function MemoDetail({ memo, onClose, onComplete, onArchive, onRequestDelete }: {
   );
 }
 
+function SelectedPlaceMap({ place }: { place: NaverPlace }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | undefined;
+
+    const createMap = () => {
+      if (cancelled) return;
+
+      if (!mapRef.current || !window.naver?.maps) {
+        attempts += 1;
+        if (attempts >= 50) {
+          setMapStatus("error");
+          return;
+        }
+        timer = window.setTimeout(createMap, 100);
+        return;
+      }
+
+      const center = new window.naver.maps.LatLng(place.lat ?? 37.5051, place.lng ?? 126.9571);
+      const map = new window.naver.maps.Map(mapRef.current, {
+        center,
+        zoom: 17,
+        zoomControl: false,
+        draggable: false,
+        scrollWheel: false,
+        pinchZoom: false,
+        keyboardShortcuts: false,
+        disableDoubleTapZoom: true,
+        disableDoubleClickZoom: true,
+        disableTwoFingerTapZoom: true,
+      });
+
+      setMapStatus("ready");
+      timer = window.setTimeout(() => {
+        if (!cancelled) window.naver.maps.Event.trigger(map, "resize");
+      }, 80);
+    };
+
+    timer = window.setTimeout(createMap, 20);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [place.lat, place.lng]);
+
+  return (
+    <div className="absolute inset-0">
+      <div ref={mapRef} className="h-full w-full" aria-label={`${place.title} 지도`} />
+      {mapStatus === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-[#f3f5f7] text-[11px] text-muted-foreground">지도를 불러오는 중이에요...</div>}
+      {mapStatus === "error" && <div className="absolute inset-0 flex items-center justify-center bg-[#f3f5f7] text-[11px] text-muted-foreground">지도를 불러오지 못했어요</div>}
+      {mapStatus === "ready" && <span className="pointer-events-none absolute left-1/2 top-[52%] flex size-9 -translate-x-1/2 -translate-y-full items-center justify-center rounded-2xl border-2 border-white bg-primary text-white shadow-lg"><MapPin size={17} fill="currentColor" /></span>}
+    </div>
+  );
+}
+
 function Composer(props: { place: string; selectedPlace: NaverPlace | null; content: string; shared: boolean; radius: number; setPlace: (v: string) => void; setSelectedPlace: (v: NaverPlace | null) => void; setContent: (v: string) => void; setShared: (v: boolean) => void; setRadius: (v: number) => void; onClose: () => void; onSave: (images: string[], coverImage: string) => void }) {
   const [images, setImages] = useState<string[]>([]);
   const [coverIdx, setCoverIdx] = useState<number>(0);
@@ -889,10 +947,8 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
               </AnimatePresence>
 
               {props.selectedPlace && !placeSearchOpen && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 118 }} className="relative mt-2 overflow-hidden rounded-[14px] border border-primary/20 bg-[#f8f9fa]">
-                  <div className="absolute inset-0 bg-[length:256px_256px] bg-top-left opacity-75" style={{ backgroundImage: `url(${mapTexture})` }} />
-                  <div className="absolute inset-0 bg-white/20" />
-                  <span className="absolute left-1/2 top-[52%] flex size-9 -translate-x-1/2 -translate-y-full items-center justify-center rounded-2xl border-2 border-white bg-primary text-white shadow-lg"><MapPin size={17} fill="currentColor" /></span>
+                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="relative mt-2 h-[118px] overflow-hidden rounded-[14px] border border-primary/20 bg-[#f8f9fa]">
+                  <SelectedPlaceMap place={props.selectedPlace} />
                   <div className="absolute inset-x-2 bottom-2 flex items-center gap-2 rounded-[11px] bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
                     <span className="min-w-0 flex-1"><b className="block truncate text-[12px]">{props.selectedPlace.title}</b><span className="block truncate text-[9px] text-muted-foreground">{props.selectedPlace.roadAddress || props.selectedPlace.address}</span></span>
                     <button type="button" onClick={() => setPlaceSearchOpen(true)} className="shrink-0 rounded-lg bg-[#e0f9f7] px-2 py-1 text-[10px] font-bold text-primary">장소 변경</button>
