@@ -96,7 +96,6 @@ function formatDistance(distance?: number) {
   return `${(distance / 1000).toFixed(1)}km`;
 }
 
-// 카테고리 기반 이모지 자동 부여 (실패 시 내용 첫 글자 사용)
 function getEmojiByCategory(category?: string, content?: string, place?: string): string {
   if (category) {
     if (category.includes("마트") || category.includes("편의점") || category.includes("생활용품")) return "🛒";
@@ -105,15 +104,9 @@ function getEmojiByCategory(category?: string, content?: string, place?: string)
     if (category.includes("공원") || category.includes("산")) return "🌳";
     if (category.includes("식당") || category.includes("음식점") || category.includes("카페")) return "☕";
   }
-  // 기본 대체 로직: 내용 또는 장소명의 첫 글자
-  const sourceText = content?.trim() || place?.trim();
-  if (sourceText) {
-    return sourceText.charAt(0);
-  }
   return "📍";
 }
 
-// 작성 모달 장소 검색용 (목업 기반 필터링)
 function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: boolean } {
   const [places, setPlaces] = useState<NaverPlace[]>([]);
   const [loading, setLoading] = useState(false);
@@ -206,7 +199,6 @@ export default function App() {
   const [myMemosOpen, setMyMemosOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Memo | null>(null);
   
-  // 현재 기기 실제 위치
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 개발자 테스트용 상태 (5회 연속 클릭 트리거)
@@ -412,7 +404,7 @@ export default function App() {
 
         if ("Notification" in window && window.Notification.permission === "granted") {
           try {
-            new window.Notification(`${nearbyMemo.place} 근처에 도착했어요!`, {
+            new window.Notification(`휘리릭 ·${nearbyMemo.place} 근처에 도착했어요!`, {
               body: nearbyMemo.content || "이 장소에 남겨둔 메모를 확인해보세요.",
               icon: "/favicon.ico", // 파비콘 설정 반영
               tag: `place-memo-${nearbyMemo.id}`,
