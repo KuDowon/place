@@ -96,6 +96,7 @@ function formatDistance(distance?: number) {
   return `${(distance / 1000).toFixed(1)}km`;
 }
 
+// 작성 모달 장소 검색용 (목업 기반 필터링)
 function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: boolean } {
   const [places, setPlaces] = useState<NaverPlace[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,33 +110,10 @@ function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: bo
 
     setLoading(true);
     const timer = window.setTimeout(() => {
-      if (window.naver?.maps?.Service?.geocode) {
-        window.naver.maps.Service.geocode(
-          { query: q },
-          (status: any, response: any) => {
-            setLoading(false);
-            if (status === window.naver.maps.Service.Status.OK && response.v2.addresses.length > 0) {
-              const items: NaverPlace[] = response.v2.addresses.map((item: any) => ({
-                title: item.userAddress || q,
-                category: "장소",
-                address: item.jibunAddress || item.englishAddress,
-                roadAddress: item.roadAddress || item.jibunAddress,
-                lat: Number(item.y),
-                lng: Number(item.x),
-              }));
-              setPlaces(items);
-            } else {
-              const filtered = MOCK_PLACES.filter((p) => p.title.includes(q) || p.category.includes(q));
-              setPlaces(filtered);
-            }
-          }
-        );
-      } else {
-        const filtered = MOCK_PLACES.filter((p) => p.title.includes(q) || p.category.includes(q));
-        setPlaces(filtered);
-        setLoading(false);
-      }
-    }, 300);
+      const filtered = MOCK_PLACES.filter((p) => p.title.includes(q) || p.category.includes(q) || p.address.includes(q) || p.roadAddress.includes(q));
+      setPlaces(filtered);
+      setLoading(false);
+    }, 150);
 
     return () => window.clearTimeout(timer);
   }, [query]);
@@ -211,13 +189,30 @@ export default function App() {
   const [myMemosOpen, setMyMemosOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Memo | null>(null);
   
-  // 🧪 개발자 테스트용 상태 (5회 연속 클릭 트리거)
+  // 현재 기기실제 위치 저장을 위한 상태
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // 개발자 테스트용 상태 (5회 연속 클릭 트리거)
   const [isDebugLocation, setIsDebugLocation] = useState(false);
   const clickCountRef = useRef(0);
   const clickTimerRef = useRef<number | null>(null);
   const notifiedMemoIdsRef = useRef<Set<number>>(new Set());
 
   const mapInstanceRef = useRef<any>(null);
+
+  // 사용자 실제 위치 추적
+  useEffect(() => {
+    if (navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => undefined,
+        { enableHighAccuracy: true }
+      );
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -282,25 +277,28 @@ export default function App() {
   const saveMemo = (images: string[], coverImage: string) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
 
-    let baseLat = TEST_LAT;
-    let baseLng = TEST_LNG;
+    let targetLat = TEST_LAT;
+    let targetLng = TEST_LNG;
 
-    // 테스트 모드가 아니면 기존 방식으로 지도 중심 좌표 사용
-    if (!isDebugLocation) {
-      baseLat = 37.5051;
-      baseLng = 126.9571;
-      if (mapInstanceRef.current && window.naver?.maps) {
-        const center = mapInstanceRef.current.getCenter();
-        baseLat = center.lat();
-        baseLng = center.lng();
-      }
+    // 1. 장소 목업 선택이 있으면 해당 좌표 지정
+    if (selectedPlace?.lat && selectedPlace?.lng) {
+      targetLat = selectedPlace.lat;
+      targetLng = selectedPlace.lng;
+    } else if (isDebugLocation) {
+      // 2. 개발자 모드면 테스트 좌표 사용
+      targetLat = TEST_LAT;
+      targetLng = TEST_LNG;
+    } else if (userLocation) {
+      // 3. 기기의 실제 현재 위치 사용 (현재 위치 부착 오류 해결)
+      targetLat = userLocation.lat;
+      targetLng = userLocation.lng;
+    } else if (mapInstanceRef.current && window.naver?.maps) {
+      // 4. 지도 중앙 좌표
+      const center = mapInstanceRef.current.getCenter();
+      targetLat = center.lat();
+      targetLng = center.lng();
     }
 
-    const offsetLat = (Math.random() - 0.5) * 0.0003;
-    const offsetLng = (Math.random() - 0.5) * 0.0003;
-
-    const targetLat = selectedPlace?.lat ?? (baseLat + offsetLat);
-    const targetLng = selectedPlace?.lng ?? (baseLng + offsetLng);
     const createdAt = new Date().toISOString();
 
     const memo: Memo = {
@@ -327,7 +325,7 @@ export default function App() {
     setPlace("");
     setSelectedPlace(null);
     setContent("");
-    setToast("이 장소에 메모를 붙였어요");
+    setToast("현재 위치에 메모를 붙였어요");
 
     if ("Notification" in window && window.Notification.permission === "default") {
       void window.Notification.requestPermission();
@@ -459,7 +457,14 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
 
-  const matchedMemos = query.trim() ? memos.filter((m) => m.place.includes(query) || m.content.includes(query)) : [];
+  // 2번 & 3번 수정사항: 검색바에서 API 연결 제거 및 목업 장소 + 내가 작성한 모든 메모가 검색되도록 처리
+  const q = query.trim().toLowerCase();
+  
+  // 1) 내가 작성했거나 생성되어 있는 메모 중 검색
+  const matchedMemos = q ? memos.filter((m) => m.place.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || (m.address && m.address.toLowerCase().includes(q))) : [];
+
+  // 2) 목업 장소 중에서 검색
+  const matchedPlaces = q ? MOCK_PLACES.filter((p) => p.title.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || p.address.toLowerCase().includes(q) || p.roadAddress.toLowerCase().includes(q)) : [];
 
   const nearby = memos.find((memo) => !memo.done) ?? memos[0];
 
@@ -564,6 +569,15 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
     };
   }, [isMapLoaded, memos, isDebugLocation]);
 
+  // 검색된 장소 클릭 시 해당 지도 위치로 이동
+  const handleSelectPlaceMock = (place: NaverPlace) => {
+    setSearchOpen(false);
+    setQuery("");
+    if (mapInstanceRef.current && window.naver?.maps && place.lat && place.lng) {
+      mapInstanceRef.current.panTo(new window.naver.maps.LatLng(place.lat, place.lng));
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative h-full overflow-hidden bg-[#f8f9fa]">
       <div id="map" ref={mapRef} className="h-full w-full" />
@@ -583,7 +597,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
             onFocus={() => setSearchOpen(true)}
             onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]"
-            placeholder="작성한 메모 검색"
+            placeholder="장소 목업 및 메모 검색"
           />
           <button onClick={() => { setQuery(""); setSearchOpen(false); }} className={query || searchOpen ? "text-muted-foreground" : "hidden"}>
             <X size={16} />
@@ -592,19 +606,46 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
         <AnimatePresence>
           {searchOpen && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mt-2 max-h-[60vh] overflow-y-auto rounded-[18px] border border-[#e7eaf1] bg-white shadow-[0_12px_30px_rgba(30,40,70,.14)]">
-              <div>
-                <p className="px-4 pb-1.5 pt-3 text-[13px] font-bold text-foreground">내 메모 검색 결과</p>
-                {matchedMemos.length === 0 && <p className="px-4 pb-3 text-[12px] text-muted-foreground">{query.trim() ? "일치하는 메모가 없어요" : "장소나 내용으로 메모를 검색할 수 있어요"}</p>}
-                {matchedMemos.map((memo) => (
-                  <button key={memo.id} onClick={() => { setSearchOpen(false); setQuery(""); onSelect(memo); }} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]">
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#f3f4f8] text-base">{memo.emoji}</span>
-                    <span className="min-w-0">
-                      <b className="block truncate text-[13px] font-bold">{memo.place}</b>
-                      <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">{memo.content}</span>
-                      <span className="mt-0.5 block text-[10px] text-[#b0b5c0]">{memo.author} · 반경 {memo.radius}m</span>
-                    </span>
-                  </button>
-                ))}
+              <div className="p-2">
+                {/* 1. 작성된 메모 검색 목록 */}
+                {matchedMemos.length > 0 && (
+                  <div className="mb-2">
+                    <p className="px-3 pb-1 pt-2 text-[11px] font-bold text-primary">내 메모 목록 ({matchedMemos.length})</p>
+                    {matchedMemos.map((memo) => (
+                      <button key={memo.id} onClick={() => { setSearchOpen(false); setQuery(""); onSelect(memo); }} className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#fafbfe]">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#f3f4f8] text-base">{memo.emoji}</span>
+                        <span className="min-w-0">
+                          <b className="block truncate text-[13px] font-bold">{memo.place}</b>
+                          <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">{memo.content}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 2. 장소 목업 검색 목록 */}
+                {matchedPlaces.length > 0 && (
+                  <div>
+                    <p className="px-3 pb-1 pt-2 text-[11px] font-bold text-muted-foreground">장소 목록 ({matchedPlaces.length})</p>
+                    {matchedPlaces.map((place, index) => (
+                      <button key={`${place.title}-${index}`} onClick={() => handleSelectPlaceMock(place)} className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left hover:bg-[#fafbfe]">
+                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#e0f9f7] text-primary"><MapPin size={16} /></span>
+                        <span className="min-w-0">
+                          <b className="block truncate text-[13px] font-bold">{place.title}</b>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{place.category} · {place.roadAddress}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 결과 없음 표시 */}
+                {q && matchedMemos.length === 0 && matchedPlaces.length === 0 && (
+                  <p className="px-4 py-4 text-center text-[12px] text-muted-foreground">일치하는 장소나 메모가 없어요</p>
+                )}
+                {!q && (
+                  <p className="px-4 py-3 text-center text-[12px] text-muted-foreground">장소명이나 작성한 메모 내용을 입력해 보세요</p>
+                )}
               </div>
             </motion.div>
           )}
