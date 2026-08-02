@@ -120,8 +120,8 @@ const initialMemos: Memo[] = [
 ];
 
 function Avatar({ name }: { name: string }) {
-  const colors: Record<string, string> = { 엄마: "bg-rose-100 text-rose-500", 아빠: "bg-sky-100 text-sky-600", 나: "bg-violet-100 text-primary" };
-  return <div className={`flex size-10 items-center justify-center rounded-2xl text-sm font-bold ${colors[name] ?? "bg-violet-100 text-primary"}`}>{name === "나" ? "유" : name.slice(0, 1)}</div>;
+  const colors: Record<string, string> = { 엄마: "bg-rose-100 text-rose-500", 아빠: "bg-sky-100 text-sky-600", 나: "bg-teal-100 text-primary" };
+  return <div className={`flex size-10 items-center justify-center rounded-2xl text-sm font-bold ${colors[name] ?? "bg-teal-100 text-primary"}`}>{name === "나" ? "뽀" : name.slice(0, 1)}</div>;
 }
 
 export default function App() {
@@ -285,7 +285,7 @@ export default function App() {
         <AnimatePresence>{composerOpen && <Composer place={place} content={content} shared={shared} radius={radius} setPlace={setPlace} setContent={setContent} setShared={setShared} setRadius={setRadius} onClose={() => setComposerOpen(false)} onSave={(imgs, cover) => saveMemo(imgs, cover)} />}</AnimatePresence>
         <AnimatePresence>{arrivalOpen && tab === "home" && <ArrivalCard memo={memos.find((memo) => memo.id === 1)!} onLater={() => setArrivalOpen(false)} onCheck={() => { updateMemo(1, { seen: true }); setArrivalOpen(false); setSelected({ ...memos.find((memo) => memo.id === 1)!, seen: true }); }} />}</AnimatePresence>
         <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 14 }} className="absolute bottom-24 left-1/2 z-[80] -translate-x-1/2 whitespace-nowrap rounded-full bg-[#171a21] px-4 py-3 text-[13px] font-medium text-white shadow-xl">{toast}</motion.div>}</AnimatePresence>
-        <AnimatePresence>{doneBurst && <motion.div initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0, scale: 1.7 }} className="pointer-events-none absolute inset-0 z-[90] flex items-center justify-center bg-white/30 backdrop-blur-[1px]"><div className="flex size-24 items-center justify-center rounded-full bg-primary text-white shadow-[0_18px_35px_rgba(103,87,255,0.35)]"><Check size={52} strokeWidth={3} /></div></motion.div>}</AnimatePresence>
+        <AnimatePresence>{doneBurst && <motion.div initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0, scale: 1.7 }} className="pointer-events-none absolute inset-0 z-[90] flex items-center justify-center bg-white/30 backdrop-blur-[1px]"><div className="flex size-24 items-center justify-center rounded-full bg-primary text-white shadow-[0_18px_35px_rgba(0,196,184,0.35)]"><Check size={52} strokeWidth={3} /></div></motion.div>}</AnimatePresence>
       </section>
     </main>
   );
@@ -343,8 +343,8 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
           icon: {
             content: `
               <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
-                <span style="position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(103,87,255,0.3); background-color: rgba(103,87,255,0.15); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-                <span style="width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background-color: #6757ff; box-shadow: 0 4px 6px rgba(0,0,0,0.15);"></span>
+                <span style="position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(0,196,184,0.3); background-color: rgba(0,196,184,0.15); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; background-color: #00C4B8; box-shadow: 0 4px 6px rgba(0,0,0,0.15);"></span>
               </div>
             `,
             anchor: new window.naver.maps.Point(24, 24),
@@ -370,7 +370,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
     }
 
     const markers = memos.map((memo) => {
-      const bgClass = memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#ece9ff]";
+      const bgClass = memo.done ? "bg-[#e8eaef] grayscale" : memo.shared ? "bg-white" : "bg-[#e0f9f7]";
       const innerContent = memo.coverImage
         ? `<img src="${memo.coverImage}" class="size-full object-cover rounded-2xl" />`
         : memo.done ? "✓" : memo.emoji;
@@ -453,7 +453,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
                 {!loading && !query.trim() && <p className="px-4 py-3 text-[12px] text-muted-foreground">장소 이름을 입력하면 위치 검색 결과가 표시됩니다</p>}
                 {places.map((place, idx) => (
                   <button key={`${place.title}-${idx}`} onClick={() => handleSelectPlace(place)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#fafbfe]">
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#eeecff] text-primary"><MapPin size={15} /></span>
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#e0f9f7] text-primary"><MapPin size={15} /></span>
                     <span className="min-w-0">
                       <b className="block truncate text-[13px] font-bold">{place.title}</b>
                       <span className="mt-0.5 block text-[11px] text-primary">{place.category}</span>
@@ -487,12 +487,12 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
 
       {chosenPlace && (
         <div className="absolute left-1/2 top-[94px] z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#171a21]/88 px-3 py-2 text-[11px] text-white">
-          <MapPin size={13} className="text-[#bdb6ff]" />{chosenPlace} 선택됨
+          <MapPin size={13} className="text-[#7eeae6]" />{chosenPlace} 선택됨
         </div>
       )}
 
       {/* 플로팅 + 버튼 */}
-      <button onClick={(e) => { e.stopPropagation(); onCompose(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(103,87,255,.35)]">
+      <button onClick={(e) => { e.stopPropagation(); onCompose(); }} className="absolute bottom-[112px] right-[18px] z-10 flex size-[58px] items-center justify-center rounded-[29px] bg-primary text-white shadow-[0_14px_15px_rgba(0,196,184,.35)]">
         <Plus size={28} />
       </button>
 
@@ -502,11 +502,11 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
           {memoTrayOpen ? (
             <motion.button key="expanded" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => onSelect(nearby)} className="w-full rounded-[20px] border border-white/80 bg-white/95 p-3 text-left shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
               <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-bold text-primary">가까운 메모 · 120m</span><span onClick={(event) => { event.stopPropagation(); setMemoTrayOpen(false); }} className="rounded-lg bg-[#f3f4f8] px-2 py-1 text-[10px] text-muted-foreground">내리기</span></div>
-              <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#ece9ff]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div>
+              <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-[#e0f9f7]">{nearby.emoji}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-foreground">{nearby.place}</p><p className="truncate text-[12px] text-muted-foreground">{nearby.author} · {nearby.content}</p></div><MapPin size={18} className="text-primary" /></div>
             </motion.button>
           ) : (
             <motion.button key="collapsed" initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} onClick={() => setMemoTrayOpen(true)} className="mx-auto flex items-center gap-2 rounded-full border border-white/80 bg-white/95 px-4 py-3 text-[12px] font-bold text-foreground shadow-[0_10px_30px_rgba(30,40,70,.12)] backdrop-blur">
-              <MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#eeecff] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
+              <MapPin size={15} className="text-primary" />메모 보기 <span className="rounded-full bg-[#e0f9f7] px-1.5 py-0.5 text-[10px] text-primary">{memos.length}</span>
             </motion.button>
           )}
         </AnimatePresence>
@@ -517,7 +517,7 @@ function HomeScreen({ memos, onSelect, onCompose, mapInstanceRef, isDebugLocatio
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
   const items: { id: Tab; label: string; icon: typeof Home }[] = [{ id: "home", label: "홈", icon: Home }, { id: "family", label: "모임", icon: UsersRound }, { id: "archive", label: "보관함", icon: Archive }, { id: "my", label: "마이", icon: UserRound }];
-  return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2" onClick={(e) => e.stopPropagation()}>{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#eeecff]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
+  return <nav className="absolute bottom-0 z-40 flex h-[82px] w-full border-t border-[#edf0f5] bg-white px-5 pb-3 pt-2" onClick={(e) => e.stopPropagation()}>{items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex flex-1 flex-col items-center gap-1 text-[10px] font-medium ${tab === id ? "text-primary" : "text-[#9aa0ae]"}`}><span className={`flex size-8 items-center justify-center rounded-xl ${tab === id ? "bg-[#e0f9f7]" : ""}`}><Icon size={19} strokeWidth={tab === id ? 2.6 : 1.9} /></span>{label}</button>)}</nav>;
 }
 
 function MemoDetail({ memo, onClose, onComplete }: { memo: Memo; onClose: () => void; onComplete: () => void }) {
@@ -536,7 +536,7 @@ function MemoDetail({ memo, onClose, onComplete }: { memo: Memo; onClose: () => 
       )}
       <div className="rounded-[18px] bg-[#fafbfe] p-4">
         <div className="mb-3 flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-[14px] bg-[#ece9ff] text-xl">{memo.emoji}</div>
+          <div className="flex size-11 items-center justify-center rounded-[14px] bg-[#e0f9f7] text-xl">{memo.emoji}</div>
           <div>
             <p className="text-[13px] text-muted-foreground">{memo.author === "나" ? "내가 남긴 메모" : `${memo.author}가 남긴 심부름`}</p>
             <p className="text-[12px] text-muted-foreground">도착 알림 · 반경 {memo.radius}m</p>
@@ -561,8 +561,8 @@ function MemoDetail({ memo, onClose, onComplete }: { memo: Memo; onClose: () => 
           </div>
         </div>
       )}
-      {memo.seen && !memo.done && <p className="mt-3 rounded-xl bg-[#f2f0ff] px-3 py-2 text-[12px] font-medium text-primary">✓ 도착 메모를 확인했어요</p>}
-      {memo.done && <p className="mt-3 rounded-xl bg-[#f0f2f5] px-3 py-2 text-[12px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}
+      {memo.seen && !memo.done && <p className="mt-3 rounded-xl bg-[#e0f9f7] px-3 py-2 text-[12px] font-medium text-primary">✓ 도착 메모를 확인했어요</p>}
+      {memo.done && <p className="mt-3 rounded-xl bg-[#f0f2f5] px-3 py-2 text-[12px] font-medium text-[#7b8290]">김뽀꾸님이 심부름을 완료했어요</p>}
       <div className="mt-5 flex gap-2">
         {memo.shared && !memo.done && <button onClick={onComplete} className="flex flex-1 items-center justify-center gap-2 rounded-[14px] bg-primary py-3.5 text-sm font-bold text-white"><Check size={17} /> 장보기 완료</button>}
         <button onClick={onClose} className={`${memo.shared && !memo.done ? "w-28" : "flex-1"} rounded-[14px] border border-border py-3.5 text-sm font-semibold text-[#5f6674]`}>닫기</button>
@@ -638,12 +638,12 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
             <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }} onClick={(e) => e.stopPropagation()} className="mx-4 w-full max-w-sm overflow-hidden rounded-[20px] bg-white shadow-[0_20px_50px_rgba(20,20,50,.22)]">
               <p className="border-b border-[#f0f1f5] px-5 py-4 text-center text-[13px] font-semibold text-muted-foreground">사진 추가 방법 선택</p>
               <button onClick={handleCameraClick} className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-[#fafbfe] active:bg-[#f3f4f8]">
-                <span className="flex size-10 items-center justify-center rounded-2xl bg-[#eeecff] text-primary"><Camera size={20} /></span>
+                <span className="flex size-10 items-center justify-center rounded-2xl bg-[#e0f9f7] text-primary"><Camera size={20} /></span>
                 <div><p className="text-[15px] font-bold">사진 촬영</p><p className="text-[12px] text-muted-foreground">카메라로 바로 찍기</p></div>
               </button>
               <div className="mx-5 border-t border-[#f0f1f5]" />
               <button onClick={() => { setPhotoPickerOpen(false); galleryRef.current?.click(); }} className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-[#fafbfe] active:bg-[#f3f4f8]">
-                <span className="flex size-10 items-center justify-center rounded-2xl bg-[#eeecff] text-primary"><Image size={20} /></span>
+                <span className="flex size-10 items-center justify-center rounded-2xl bg-[#e0f9f7] text-primary"><Image size={20} /></span>
                 <div><p className="text-[15px] font-bold">사진 첨부</p><p className="text-[12px] text-muted-foreground">갤러리에서 선택</p></div>
               </button>
               <div className="px-4 pb-4 pt-2">
@@ -742,20 +742,20 @@ function Composer(props: { place: string; content: string; shared: boolean; radi
             </div>
             <div>
               <p className="mb-2 text-[13px] font-bold">도착 알림 반경</p>
-              <div className="flex gap-2">{[50, 100, 300].map((v) => <button key={v} onClick={() => props.setRadius(v)} className={`flex-1 rounded-xl border py-2 text-[12px] font-bold ${props.radius === v ? "border-primary bg-[#eeecff] text-primary" : "border-border text-muted-foreground"}`}>{v}m</button>)}</div>
+              <div className="flex gap-2">{[50, 100, 300].map((v) => <button key={v} onClick={() => props.setRadius(v)} className={`flex-1 rounded-xl border py-2 text-[12px] font-bold ${props.radius === v ? "border-primary bg-[#e0f9f7] text-primary" : "border-border text-muted-foreground"}`}>{v}m</button>)}</div>
             </div>
           </div>
         </div>
-        <button disabled={!canSave} onClick={() => props.onSave(images, images[coverIdx] ?? "")} className="mt-4 w-full shrink-0 rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#c7c4ed]">메모 붙이기</button>
+        <button disabled={!canSave} onClick={() => props.onSave(images, images[coverIdx] ?? "")} className="mt-4 w-full shrink-0 rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#7eeae6]">메모 붙이기</button>
       </motion.section>
     </motion.div>
   );
 }
 
-function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]" onClick={(e) => e.stopPropagation()}><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eeecff] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
+function ArrivalCard({ memo, onLater, onCheck }: { memo: Memo; onLater: () => void; onCheck: () => void }) { return <motion.section initial={{ y: 160, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 160, opacity: 0 }} transition={{ type: "spring", damping: 23, stiffness: 320 }} className="absolute inset-x-4 bottom-[96px] z-[35] rounded-[22px] border border-white bg-white p-4 shadow-[0_18px_45px_rgba(39,39,74,.20)]" onClick={(e) => e.stopPropagation()}><div className="mb-3 flex items-start gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#e0f9f7] text-xl">🛒</div><div><p className="text-[16px] font-bold">마트에 도착했어요! 🛒</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">엄마가 남긴 심부름 — {memo.content}</p></div></div><div className="flex gap-2"><button onClick={onLater} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-[#f3f4f8] py-2.5 text-[12px] font-bold text-[#697080]"><X size={15} /> 나중에 보기</button><button onClick={onCheck} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-2.5 text-[12px] font-bold text-white"><Check size={15} /> 확인했어요</button></div></motion.section>; }
 
-function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 모임의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">모임 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">유연님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
+function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m: Memo) => void; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="mb-6"><p className="text-[12px] font-bold text-primary">우리 모임의 장소 메모</p><h1 className="mt-1 text-[24px] font-bold">모임 심부름</h1></div><div className="space-y-3">{memos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[20px] bg-white p-4 text-left shadow-[0_8px_25px_rgba(30,40,70,.06)]"><div className="flex gap-3"><Avatar name={memo.author} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between"><p className="text-[14px] font-bold">{memo.author}</p><span className="flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 size={11} />{memo.time}</span></div><p className="mt-0.5 flex items-center gap-1 text-[12px] text-primary"><MapPin size={12} />{memo.place}</p><p className={`mt-2 text-[14px] leading-5 ${memo.done ? "text-[#a6abb6] line-through" : "text-foreground"}`}>{memo.content}</p>{memo.done && <p className="mt-3 rounded-lg bg-[#f0f2f5] px-2.5 py-2 text-[11px] font-medium text-[#7b8290]">김뽀꾸님이 심부름을 완료했어요</p>}</div></div></button>)}</div><BottomNav tab="family" setTab={setTab} /></motion.div>; }
 
 function ArchiveScreen({ memos, setTab }: { memos: Memo[]; setTab: (tab: Tab) => void }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><p className="text-[12px] font-bold text-primary">기억하고 싶은 장소</p><h1 className="mt-1 text-[24px] font-bold">보관함</h1><div className="mt-7 rounded-[20px] bg-white p-5 text-center text-sm text-muted-foreground">{memos.length ? `${memos.length}개의 완료 메모가 있어요.` : "아직 보관한 메모가 없어요."}</div><BottomNav tab="archive" setTab={setTab} /></motion.div>; }
 
-function MyScreen({ memos, setTab, myMemosOpen, setMyMemosOpen, onSelect }: { memos: Memo[]; setTab: (tab: Tab) => void; myMemosOpen: boolean; setMyMemosOpen: (value: boolean) => void; onSelect: (memo: Memo) => void }) { const ownMemos = memos.filter((memo) => memo.author === "나"); return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="flex items-center gap-3"><Avatar name="나" /><div><p className="text-lg font-bold">유연님</p><p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p></div></div>{myMemosOpen ? <div className="mt-7"><button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary"><ChevronLeft size={17} /> 설정으로</button><h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2><div className="space-y-2">{ownMemos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left"><p className="flex items-center gap-1 text-[12px] text-primary"><MapPin size={13} />{memo.place}</p><p className="mt-1 text-[14px] font-medium">{memo.content}</p></button>)}{!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}</div></div> : <div className="mt-7 space-y-3"><button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">내 메모 보기 <MapPin className="float-right text-primary" size={18} /></button><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">알림 설정 <BellRing className="float-right text-primary" size={18} /></div><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">모임 관리 <UsersRound className="float-right text-primary" size={18} /></div></div>}<BottomNav tab="my" setTab={setTab} /></motion.div>; }
+function MyScreen({ memos, setTab, myMemosOpen, setMyMemosOpen, onSelect }: { memos: Memo[]; setTab: (tab: Tab) => void; myMemosOpen: boolean; setMyMemosOpen: (value: boolean) => void; onSelect: (memo: Memo) => void }) { const ownMemos = memos.filter((memo) => memo.author === "나"); return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full bg-[#f7f8fb] px-5 pt-[61px]" onClick={(e) => e.stopPropagation()}><div className="flex items-center gap-3"><Avatar name="나" /><div><p className="text-lg font-bold">김뽀꾸님</p><p className="text-[12px] text-muted-foreground">나의 장소 메모 {ownMemos.length}개</p></div></div>{myMemosOpen ? <div className="mt-7"><button onClick={() => setMyMemosOpen(false)} className="mb-3 flex items-center gap-1 text-[13px] font-bold text-primary"><ChevronLeft size={17} /> 설정으로</button><h2 className="mb-3 text-[19px] font-bold">내 메모 보기</h2><div className="space-y-2">{ownMemos.map((memo) => <button onClick={() => onSelect(memo)} key={memo.id} className="w-full rounded-[17px] bg-white p-4 text-left"><p className="flex items-center gap-1 text-[12px] text-primary"><MapPin size={13} />{memo.place}</p><p className="mt-1 text-[14px] font-medium">{memo.content}</p></button>)}{!ownMemos.length && <div className="rounded-[17px] bg-white p-4 text-center text-sm text-muted-foreground">아직 내가 남긴 메모가 없어요.</div>}</div></div> : <div className="mt-7 space-y-3"><button onClick={() => setMyMemosOpen(true)} className="w-full rounded-[18px] bg-white p-4 text-left text-sm font-semibold">내 메모 보기 <MapPin className="float-right text-primary" size={18} /></button><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">알림 설정 <BellRing className="float-right text-primary" size={18} /></div><div className="rounded-[18px] bg-white p-4 text-sm font-semibold">모임 관리 <UsersRound className="float-right text-primary" size={18} /></div></div>}<BottomNav tab="my" setTab={setTab} /></motion.div>; }
