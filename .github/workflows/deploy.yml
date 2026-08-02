@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: 'pages'
-  cancel-in-progress: true
+  # 이미 배포 중인 작업을 취소하지 않고, 다음 배포가 순서대로 기다리게 합니다.
+  cancel-in-progress: false
 
 jobs:
   deploy:
