@@ -995,17 +995,6 @@ function FamilyScreen({ memos, onSelect, setTab }: { memos: Memo[]; onSelect: (m
   );
 }
 
-function MemoLocationThumb({ memo }: { memo: Memo }) {
-  return (
-    <div className="relative h-[104px] overflow-hidden rounded-[15px] border border-[#e8ebf0] bg-[#f5f7f8]">
-      <div className="absolute inset-0 bg-[length:256px_256px] bg-center opacity-75" style={{ backgroundImage: `url(${mapTexture})` }} />
-      <div className="absolute inset-0 bg-white/15" />
-      <span className="absolute left-1/2 top-[55%] flex size-8 -translate-x-1/2 -translate-y-full items-center justify-center rounded-2xl border-2 border-white bg-primary text-white shadow-lg"><MapPin size={15} fill="currentColor" /></span>
-      <span className="absolute bottom-2 left-2 right-2 truncate rounded-lg bg-white/95 px-2.5 py-1.5 text-[9px] text-muted-foreground shadow-sm">{memo.address ?? `위도 ${memo.lat.toFixed(4)}, 경도 ${memo.lng.toFixed(4)}`}</span>
-    </div>
-  );
-}
-
 function ArchiveScreen({ memos, setTab, onSelect, onRequestDelete }: { memos: Memo[]; setTab: (tab: Tab) => void; onSelect: (memo: Memo) => void; onRequestDelete: (memo: Memo) => void }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full overflow-y-auto bg-[#f7f8fb] px-5 pb-28 pt-[61px]" onClick={(e) => e.stopPropagation()}>
@@ -1016,8 +1005,7 @@ function ArchiveScreen({ memos, setTab, onSelect, onRequestDelete }: { memos: Me
         {memos.map((memo) => (
           <article key={memo.id} className="rounded-[20px] bg-white p-4 shadow-[0_8px_25px_rgba(30,40,70,.06)]">
             <button onClick={() => onSelect(memo)} className="w-full text-left">
-              <MemoLocationThumb memo={memo} />
-              <p className="mt-3 flex items-center gap-1 text-[13px] font-bold text-primary"><MapPin size={13} />{memo.place}</p>
+              <p className="flex items-center gap-1 text-[13px] font-bold text-primary"><MapPin size={13} />{memo.place}</p>
               {memo.address && <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{memo.address}</p>}
               <p className="mt-2 text-[14px] leading-5 text-foreground">{memo.content || "사진으로 남긴 메모"}</p>
               {memo.images?.length ? <div className="mt-3 flex gap-2 overflow-hidden">{memo.images.slice(0, 3).map((image, index) => <img key={index} src={image} className="size-14 rounded-xl object-cover" />)}</div> : null}
