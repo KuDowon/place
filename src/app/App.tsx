@@ -75,6 +75,7 @@ const MEMO_STORAGE_KEY = "hwiririk-memos-v3";
 const MOCK_PLACES: NaverPlace[] = [
   { title: "이마트 흑석점", category: "대형마트", address: "서울특별시 동작구 흑석동 97", roadAddress: "서울특별시 동작구 흑석로 97", lat: 37.5082, lng: 126.9635 },
   { title: "중앙약국", category: "약국", address: "서울특별시 동작구 흑석동 102", roadAddress: "서울특별시 동작구 흑석로 102", lat: 37.5071, lng: 126.9585 },
+  { title: "올리브영 중앙대점", category: "헬스앤뷰티", address: "서울특별시 동작구 흑석동 195-17", roadAddress: "서울특별시 동작구 흑석로 81", lat: 37.5062, lng: 126.9573 },
   { title: "중앙대학교 정문", category: "대학교", address: "서울특별시 동작구 흑석동 84", roadAddress: "서울특별시 동작구 흑석로 84", lat: 37.5051, lng: 126.9571 },
   { title: "흑석한강공원", category: "공원", address: "서울특별시 동작구 흑석동 1", roadAddress: "서울특별시 동작구 흑석로 1", lat: 37.5095, lng: 126.9610 },
   { title: "이마트24 흑석점", category: "편의점", address: "서울특별시 동작구 흑석동 201", roadAddress: "서울특별시 동작구 흑석로 201", lat: 37.5060, lng: 126.9590 },
@@ -683,7 +684,7 @@ function HomeScreen({
             onFocus={() => setSearchOpen(true)}
             onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]"
-            placeholder="장소 목업 및 메모 검색"
+            placeholder="장소 및 메모 검색"
           />
           <button onClick={() => { setQuery(""); setSearchOpen(false); }} className={query || searchOpen ? "text-muted-foreground" : "hidden"}>
             <X size={16} />
