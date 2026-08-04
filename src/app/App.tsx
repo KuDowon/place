@@ -674,7 +674,7 @@ function HomeScreen({
             onFocus={() => setSearchOpen(true)}
             onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]"
-            placeholder="장소 목업 및 메모 검색"
+            placeholder="장소 및 메모 검색"
           />
           <button onClick={() => { setQuery(""); setSearchOpen(false); }} className={query || searchOpen ? "text-muted-foreground" : "hidden"}>
             <X size={16} />
