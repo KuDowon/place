@@ -29,6 +29,7 @@ declare global {
 }
 
 type Tab = "home" | "family" | "archive" | "my";
+type FamilyMember = "엄마" | "아빠";
 
 type Memo = {
   id: number;
@@ -37,6 +38,7 @@ type Memo = {
   author: string;
   emoji: string;
   shared: boolean;
+  sharedWith?: FamilyMember[];
   radius: number;
   time: string;
   done?: boolean;
@@ -145,6 +147,7 @@ function normalizeMemo(memo: Partial<Memo> & Pick<Memo, "id" | "place" | "conten
   return {
     ...memo,
     images: memo.images ?? [],
+    sharedWith: memo.sharedWith ?? [],
     createdAt,
     expiresAt: memo.expiresAt ?? new Date(new Date(createdAt).getTime() + 24 * HOUR).toISOString(),
     archived: memo.archived ?? false,
@@ -296,7 +299,7 @@ export default function App() {
   };
 
   // 장소에 메모 저장하기
-  const saveMemo = (images: string[], coverImage: string) => {
+  const saveMemo = (images: string[], coverImage: string, sharedWith: FamilyMember[]) => {
     if (!place.trim() || (!content.trim() && images.length === 0)) return;
 
     let targetLat = TEST_LAT;
@@ -328,6 +331,7 @@ export default function App() {
       author: "나",
       emoji: memoEmoji,
       shared,
+      sharedWith: shared ? sharedWith : [],
       radius,
       time: "24시간 남음",
       lat: targetLat,
@@ -345,6 +349,7 @@ export default function App() {
     setPlace("");
     setSelectedPlace(null);
     setContent("");
+    setShared(false);
     setToast("장소에 메모를 부착하고 핀을 꼽았어요!");
 
     if ("Notification" in window && window.Notification.permission === "default") {
@@ -473,7 +478,7 @@ export default function App() {
         {tab === "home" && <BottomNav tab={tab} setTab={handleTabChange} />}
 
         <AnimatePresence>{selected && <MemoDetail memo={selected} onClose={() => setSelected(null)} onComplete={() => complete(selected)} onArchive={() => archiveMemo(selected)} onRequestDelete={() => setDeleteTarget(selected)} />}</AnimatePresence>
-        <AnimatePresence>{composerOpen && <Composer place={place} selectedPlace={selectedPlace} content={content} shared={shared} radius={radius} setPlace={setPlace} setSelectedPlace={setSelectedPlace} setContent={setContent} setShared={setShared} setRadius={setRadius} onClose={() => setComposerOpen(false)} onSave={(imgs, cover) => saveMemo(imgs, cover)} />}</AnimatePresence>
+        <AnimatePresence>{composerOpen && <Composer place={place} selectedPlace={selectedPlace} content={content} shared={shared} radius={radius} setPlace={setPlace} setSelectedPlace={setSelectedPlace} setContent={setContent} setShared={setShared} setRadius={setRadius} onClose={() => { setComposerOpen(false); setShared(false); }} onSave={(imgs, cover, sharedWith) => saveMemo(imgs, cover, sharedWith)} />}</AnimatePresence>
         <AnimatePresence>{arrivalOpen && tab === "home" && shownArrivalMemo && <ArrivalCard memo={shownArrivalMemo} onLater={() => { setArrivalOpen(false); setArrivalTarget(null); }} onCheck={() => { updateMemo(shownArrivalMemo.id, { seen: true }); setArrivalOpen(false); setArrivalTarget(null); setSelected({ ...shownArrivalMemo, seen: true }); }} />}</AnimatePresence>
         <AnimatePresence>{deleteTarget && <DeleteMemoDialog memo={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteMemo(deleteTarget)} />}</AnimatePresence>
         <AnimatePresence>{toast && <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 14 }} className="absolute bottom-24 left-1/2 z-[80] -translate-x-1/2 whitespace-nowrap rounded-full bg-[#171a21] px-4 py-3 text-[13px] font-medium text-white shadow-xl">{toast}</motion.div>}</AnimatePresence>
@@ -674,7 +679,7 @@ function HomeScreen({
             onFocus={() => setSearchOpen(true)}
             onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#757575]"
-            placeholder="장소 및 메모 검색"
+            placeholder="장소 목업 및 메모 검색"
           />
           <button onClick={() => { setQuery(""); setSearchOpen(false); }} className={query || searchOpen ? "text-muted-foreground" : "hidden"}>
             <X size={16} />
@@ -835,6 +840,7 @@ function MemoDetail({ memo, onClose, onComplete, onArchive, onRequestDelete }: {
         <div><p className="text-muted-foreground">작성일</p><p className="mt-0.5 font-bold">{formatDate(memo.createdAt)}</p></div>
         <div><p className="text-muted-foreground">완료일</p><p className="mt-0.5 font-bold">{memo.completedAt ? formatDate(memo.completedAt) : "아직 완료 전"}</p></div>
         <div><p className="text-muted-foreground">완료한 사람</p><p className="mt-0.5 font-bold">{memo.completedBy ?? "—"}</p></div>
+        {memo.shared && <div className="col-span-2 border-t border-[#eef0f4] pt-2"><p className="text-muted-foreground">공유 대상</p><p className="mt-0.5 font-bold text-primary">{memo.sharedWith && memo.sharedWith.length > 0 ? memo.sharedWith.join(" · ") : "모임 전체"}</p></div>}
       </div>
       {memo.images && memo.images.length > 1 && (
         <div className="mt-3">
@@ -930,11 +936,14 @@ function SelectedPlaceMap({ place }: { place: NaverPlace }) {
   );
 }
 
-function Composer(props: { place: string; selectedPlace: NaverPlace | null; content: string; shared: boolean; radius: number; setPlace: (v: string) => void; setSelectedPlace: (v: NaverPlace | null) => void; setContent: (v: string) => void; setShared: (v: boolean) => void; setRadius: (v: number) => void; onClose: () => void; onSave: (images: string[], coverImage: string) => void }) {
+function Composer(props: { place: string; selectedPlace: NaverPlace | null; content: string; shared: boolean; radius: number; setPlace: (v: string) => void; setSelectedPlace: (v: NaverPlace | null) => void; setContent: (v: string) => void; setShared: (v: boolean) => void; setRadius: (v: number) => void; onClose: () => void; onSave: (images: string[], coverImage: string, sharedWith: FamilyMember[]) => void }) {
   const [images, setImages] = useState<string[]>([]);
   const [coverIdx, setCoverIdx] = useState<number>(0);
   const [photoPickerOpen, setPhotoPickerOpen] = useState(false);
   const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [sharedWith, setSharedWith] = useState<FamilyMember[]>([]);
+  const [shareDraft, setShareDraft] = useState<FamilyMember[]>([]);
   const [placeQuery, setPlaceQuery] = useState(props.place);
   const [placeSearchOpen, setPlaceSearchOpen] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -1015,7 +1024,23 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
     }
   };
 
-  const canSave = props.place.trim() && (props.content.trim() || images.length > 0);
+  const toggleShareMember = (member: FamilyMember) => {
+    setShareDraft((members) => members.includes(member) ? members.filter((name) => name !== member) : [...members, member]);
+  };
+
+  const openSharePicker = () => {
+    setShareDraft(sharedWith);
+    props.setShared(true);
+    setSharePickerOpen(true);
+  };
+
+  const closeSharePicker = () => {
+    setShareDraft(sharedWith);
+    setSharePickerOpen(false);
+    if (sharedWith.length === 0) props.setShared(false);
+  };
+
+  const canSave = props.place.trim() && (props.content.trim() || images.length > 0) && (!props.shared || sharedWith.length > 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[70] bg-[#171a21]/25 backdrop-blur-[1px]" onClick={(e) => e.stopPropagation()}>
@@ -1053,6 +1078,26 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
                 <button onClick={() => setCameraPermissionDenied(false)} className="flex-1 rounded-[13px] border border-border py-3 text-[14px] font-semibold text-[#5f6674]">닫기</button>
                 <button onClick={() => { setCameraPermissionDenied(false); galleryRef.current?.click(); }} className="flex-1 rounded-[13px] bg-primary py-3 text-[14px] font-bold text-white">갤러리로 대체</button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {sharePickerOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeSharePicker} className="absolute inset-0 z-[85] flex items-center justify-center bg-black/35 px-6">
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 12 }} transition={{ type: "spring", damping: 25, stiffness: 340 }} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] bg-white p-6 shadow-[0_20px_55px_rgba(20,20,50,.24)]">
+              <div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e0f9f7] text-primary"><UsersRound size={26} /></span><h3 className="mt-4 text-[18px] font-bold">누구와 공유할까요?</h3><p className="mt-1 text-[12px] text-muted-foreground">엄마와 아빠 중 함께 볼 사람을 선택해 주세요.</p></div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {(["엄마", "아빠"] as FamilyMember[]).map((member) => {
+                  const isSelected = shareDraft.includes(member);
+                  return <button type="button" key={member} onClick={() => toggleShareMember(member)} className={`relative flex flex-col items-center gap-2 rounded-[16px] border py-4 text-[14px] font-bold transition-colors ${isSelected ? "border-primary bg-[#e0f9f7] text-primary" : "border-border bg-white text-foreground"}`}>
+                    <span className={`flex size-11 items-center justify-center rounded-2xl text-[15px] ${member === "엄마" ? "bg-rose-100 text-rose-500" : "bg-sky-100 text-sky-600"}`}>{member.slice(0, 1)}</span>
+                    {member}
+                    {isSelected && <span className="absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full bg-primary text-white"><Check size={12} strokeWidth={3} /></span>}
+                  </button>;
+                })}
+              </div>
+              <div className="mt-5 flex gap-2"><button type="button" onClick={closeSharePicker} className="flex-1 rounded-[13px] border border-border py-3 text-[13px] font-bold text-[#5f6674]">취소</button><button type="button" disabled={shareDraft.length === 0} onClick={() => { setSharedWith(shareDraft); props.setShared(true); setSharePickerOpen(false); }} className="flex-1 rounded-[13px] bg-primary py-3 text-[13px] font-bold text-white disabled:bg-[#7eeae6]">선택 완료</button></div>
             </motion.div>
           </motion.div>
         )}
@@ -1169,9 +1214,10 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
             <div>
               <p className="mb-2 text-[13px] font-bold">공개 범위</p>
               <div className="grid grid-cols-2 rounded-[13px] bg-[#f3f4f8] p-1">
-                <button onClick={() => props.setShared(false)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${!props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>나만 보기</button>
-                <button onClick={() => props.setShared(true)} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>모임 공유</button>
+                <button onClick={() => { props.setShared(false); setSharedWith([]); setShareDraft([]); }} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${!props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>나만 보기</button>
+                <button onClick={openSharePicker} className={`rounded-[10px] py-2.5 text-[13px] font-bold ${props.shared ? "bg-white text-primary shadow-sm" : "text-muted-foreground"}`}>모임 공유</button>
               </div>
+              {props.shared && sharedWith.length > 0 && <button type="button" onClick={openSharePicker} className="mt-2 flex w-full items-center justify-between rounded-[12px] border border-primary/20 bg-[#f3fcfb] px-3 py-2.5 text-left"><span className="text-[11px] text-muted-foreground">공유 대상</span><span className="flex items-center gap-1.5 text-[12px] font-bold text-primary">{sharedWith.join(" · ")}<ChevronLeft size={14} className="rotate-180" /></span></button>}
             </div>
             <div>
               <p className="mb-2 text-[13px] font-bold">도착 알림 반경</p>
@@ -1180,7 +1226,7 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
             </div>
           </div>
         </div>
-        <button disabled={!canSave} onClick={() => props.onSave(images, images[coverIdx] ?? "")} className="mt-4 w-full shrink-0 rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#7eeae6]">메모 붙이기</button>
+        <button disabled={!canSave} onClick={() => props.onSave(images, images[coverIdx] ?? "", sharedWith)} className="mt-4 w-full shrink-0 rounded-[15px] bg-primary py-3.5 text-sm font-bold text-white disabled:bg-[#7eeae6]">메모 붙이기</button>
       </motion.section>
     </motion.div>
   );
