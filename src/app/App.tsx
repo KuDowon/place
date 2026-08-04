@@ -29,7 +29,7 @@ declare global {
 }
 
 type Tab = "home" | "family" | "archive" | "my";
-type FamilyMember = "엄마" | "아빠";
+type FamilyMember = "엄마" | "아빠" | "언니";
 
 type Memo = {
   id: number;
@@ -162,7 +162,10 @@ function loadMemos(): Memo[] {
     if (!saved) return initialMemos();
     const parsed = JSON.parse(saved) as Memo[];
     if (!Array.isArray(parsed)) return initialMemos();
-    return parsed.map(normalizeMemo).filter((memo) => memo.archived || new Date(memo.expiresAt).getTime() > Date.now());
+    const normalized = parsed.map(normalizeMemo).filter((memo) => memo.archived || new Date(memo.expiresAt).getTime() > Date.now());
+    const savedIds = new Set(normalized.map((memo) => memo.id));
+    const restoredDemoMemos = initialMemos().filter((memo) => !memo.archived && !savedIds.has(memo.id));
+    return [...restoredDemoMemos, ...normalized];
   } catch {
     return initialMemos();
   }
@@ -535,7 +538,7 @@ function HomeScreen({
   useEffect(() => {
     if (!isMapLoaded || !mapRef.current) return;
 
-    if (!mapInstanceRef.current) {
+    if (!mapInstanceRef.current || mapInstanceRef.current._hwiririkContainer !== mapRef.current) {
       const initialCenter = isDebugLocation 
         ? new window.naver.maps.LatLng(TEST_LAT, TEST_LNG) 
         : new window.naver.maps.LatLng(37.5051, 126.9571);
@@ -546,6 +549,7 @@ function HomeScreen({
         zoomControl: false,
       };
       mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
+      mapInstanceRef.current._hwiririkContainer = mapRef.current;
     }
 
     const map = mapInstanceRef.current;
@@ -569,7 +573,7 @@ function HomeScreen({
       } else {
         map._myLocationMarker.setPosition(myLatLng);
       }
-      map.panTo(myLatLng);
+      if (memos.length === 0) map.panTo(myLatLng);
     };
 
     if (isDebugLocation) {
@@ -1086,12 +1090,12 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
         {sharePickerOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeSharePicker} className="absolute inset-0 z-[85] flex items-center justify-center bg-black/35 px-6">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 12 }} transition={{ type: "spring", damping: 25, stiffness: 340 }} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] bg-white p-6 shadow-[0_20px_55px_rgba(20,20,50,.24)]">
-              <div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e0f9f7] text-primary"><UsersRound size={26} /></span><h3 className="mt-4 text-[18px] font-bold">누구와 공유할까요?</h3><p className="mt-1 text-[12px] text-muted-foreground">엄마와 아빠 중 함께 볼 사람을 선택해 주세요.</p></div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {(["엄마", "아빠"] as FamilyMember[]).map((member) => {
+              <div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e0f9f7] text-primary"><UsersRound size={26} /></span><h3 className="mt-4 text-[18px] font-bold">누구와 공유할까요?</h3><p className="mt-1 text-[12px] text-muted-foreground">엄마, 아빠, 언니 중 함께 볼 사람을 선택해 주세요.</p></div>
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                {(["엄마", "아빠", "언니"] as FamilyMember[]).map((member) => {
                   const isSelected = shareDraft.includes(member);
                   return <button type="button" key={member} onClick={() => toggleShareMember(member)} className={`relative flex flex-col items-center gap-2 rounded-[16px] border py-4 text-[14px] font-bold transition-colors ${isSelected ? "border-primary bg-[#e0f9f7] text-primary" : "border-border bg-white text-foreground"}`}>
-                    <span className={`flex size-11 items-center justify-center rounded-2xl text-[15px] ${member === "엄마" ? "bg-rose-100 text-rose-500" : "bg-sky-100 text-sky-600"}`}>{member.slice(0, 1)}</span>
+                    <span className={`flex size-11 items-center justify-center rounded-2xl text-[15px] ${member === "엄마" ? "bg-rose-100 text-rose-500" : member === "아빠" ? "bg-sky-100 text-sky-600" : "bg-violet-100 text-violet-600"}`}>{member.slice(0, 1)}</span>
                     {member}
                     {isSelected && <span className="absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full bg-primary text-white"><Check size={12} strokeWidth={3} /></span>}
                   </button>;
