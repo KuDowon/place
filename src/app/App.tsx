@@ -29,7 +29,7 @@ declare global {
 }
 
 type Tab = "home" | "family" | "archive" | "my";
-type FamilyMember = "엄마" | "아빠" | "김뽀꾸";
+type FamilyMember = "엄마" | "아빠" | "언니";
 
 type Memo = {
   id: number;
@@ -38,7 +38,7 @@ type Memo = {
   author: string;
   emoji: string;
   shared: boolean;
-  sharedWith?: FamilyMember[];
+  sharedWith?: string[];
   radius: number;
   time: string;
   done?: boolean;
@@ -137,6 +137,7 @@ function useNaverPlaceSearch(query: string): { places: NaverPlace[]; loading: bo
 function initialMemos(): Memo[] {
   const now = Date.now();
   return [
+    { id: 4, place: "올리브영 중앙대점", content: "동생아 올영 픽업좀^^~", author: "언니", emoji: "📍", shared: true, sharedWith: ["김뽀꾸"], radius: 100, time: "24시간 남음", lat: 37.5062, lng: 126.9573, address: "서울특별시 동작구 흑석로 81", createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 24 * HOUR).toISOString(), archived: false },
     { id: 1, place: "이마트 흑석점", content: "우유, 계란, 휴지 사오기", author: "엄마", emoji: "🛒", shared: true, radius: 100, time: "22시간 남음", lat: 37.5082, lng: 126.9635, address: "서울특별시 동작구 흑석로 97", createdAt: new Date(now - 2 * HOUR).toISOString(), expiresAt: new Date(now + 22 * HOUR).toISOString(), archived: false },
     { id: 2, place: "중앙약국", content: "할머니 약 받아오기", author: "아빠", emoji: "💊", shared: true, radius: 300, time: "19시간 남음", lat: 37.5071, lng: 126.9585, address: "서울특별시 동작구 흑석로 102", createdAt: new Date(now - 5 * HOUR).toISOString(), expiresAt: new Date(now + 19 * HOUR).toISOString(), archived: false },
     { id: 3, place: "중앙대학교 정문", content: "학생지원팀에서 증명서 출력하기", author: "나", emoji: "🎓", shared: false, radius: 100, time: "23시간 남음", lat: 37.5051, lng: 126.9571, address: "서울특별시 동작구 흑석로 84", createdAt: new Date(now - HOUR).toISOString(), expiresAt: new Date(now + 23 * HOUR).toISOString(), archived: true, archivedAt: new Date(now - 30 * 60 * 1000).toISOString() },
@@ -1091,9 +1092,9 @@ function Composer(props: { place: string; selectedPlace: NaverPlace | null; cont
         {sharePickerOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeSharePicker} className="absolute inset-0 z-[85] flex items-center justify-center bg-black/35 px-6">
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 12 }} transition={{ type: "spring", damping: 25, stiffness: 340 }} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] bg-white p-6 shadow-[0_20px_55px_rgba(20,20,50,.24)]">
-              <div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e0f9f7] text-primary"><UsersRound size={26} /></span><h3 className="mt-4 text-[18px] font-bold">누구와 공유할까요?</h3><p className="mt-1 text-[12px] text-muted-foreground">엄마, 아빠, 김뽀꾸 중 함께 볼 사람을 선택해 주세요.</p></div>
+              <div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e0f9f7] text-primary"><UsersRound size={26} /></span><h3 className="mt-4 text-[18px] font-bold">누구와 공유할까요?</h3><p className="mt-1 text-[12px] text-muted-foreground">엄마, 아빠, 언니 중 함께 볼 사람을 선택해 주세요.</p></div>
               <div className="mt-5 grid grid-cols-3 gap-2">
-                {(["엄마", "아빠", "김뽀꾸"] as FamilyMember[]).map((member) => {
+                {(["엄마", "아빠", "언니"] as FamilyMember[]).map((member) => {
                   const isSelected = shareDraft.includes(member);
                   return <button type="button" key={member} onClick={() => toggleShareMember(member)} className={`relative flex flex-col items-center gap-2 rounded-[16px] border py-4 text-[14px] font-bold transition-colors ${isSelected ? "border-primary bg-[#e0f9f7] text-primary" : "border-border bg-white text-foreground"}`}>
                     <span className={`flex size-11 items-center justify-center rounded-2xl text-[15px] ${member === "엄마" ? "bg-rose-100 text-rose-500" : member === "아빠" ? "bg-sky-100 text-sky-600" : "bg-violet-100 text-violet-600"}`}>{member.slice(0, 1)}</span>
