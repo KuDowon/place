@@ -868,7 +868,7 @@ function MemoDetail({ memo, onClose, onComplete, onArchive, onRequestDelete }: {
       <button disabled={memo.archived} onClick={onArchive} className={`mt-4 flex w-full items-center justify-center gap-2 rounded-[14px] border py-3.5 text-sm font-bold ${memo.archived ? "border-primary/20 bg-[#eafbf9] text-primary" : "border-primary bg-white text-primary"}`}><Archive size={17} />{memo.archived ? "보관함에 저장됨" : "보관함에 저장"}{memo.archived && <Check size={15} />}</button>
       {memo.author === "나" && <button onClick={onRequestDelete} className="mt-2 flex w-full items-center justify-center gap-2 rounded-[14px] border border-rose-200 bg-rose-50 py-3.5 text-sm font-bold text-rose-500"><Trash2 size={17} />내 메모 삭제</button>}
       <div className="mt-5 flex gap-2">
-        {memo.shared && !memo.done && <button onClick={onComplete} className="flex flex-1 items-center justify-center gap-2 rounded-[14px] bg-primary py-3.5 text-sm font-bold text-white"><Check size={17} /> 장보기 완료</button>}
+        {memo.shared && !memo.done && <button onClick={onComplete} className="flex flex-1 items-center justify-center gap-2 rounded-[14px] bg-primary py-3.5 text-sm font-bold text-white"><Check size={17} /> 완료</button>}
         <button onClick={onClose} className={`${memo.shared && !memo.done ? "w-28" : "flex-1"} rounded-[14px] border border-border py-3.5 text-sm font-semibold text-[#5f6674]`}>닫기</button>
       </div>
       <AnimatePresence>
